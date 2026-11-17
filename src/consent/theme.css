@@ -1,0 +1,9 @@
+/* @japanglobal/kit — JGC overrides on top of vanilla-cookieconsent. Sites map --cc-* to their tokens. */
+#cc-main {
+  --cc-font-family: inherit;
+  z-index: var(--consent-z, 2147483000);
+}
+/* Sites with a fixed bottom dock set --consent-bottom (e.g. the mobile nav height). */
+#cc-main .cm--bar.cm--bottom {
+  bottom: var(--consent-bottom, 0px);
+}

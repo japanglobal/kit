@@ -29,6 +29,7 @@ describe("defineConsent", () => {
   it("withdrawal clears each category's cookies", () => {
     const names = c.categories.personalization?.autoClear?.cookies.map((x) => String(x.name));
     expect(names).toEqual([String(/^ph_.*$/), String(/^_fbp$/), String(/^_fbc$/)]);
+    expect(c.categories.personalization?.autoClear?.reloadPage).toBe(true);
     expect(globToRegExp("zc_xp_*").test("zc_xp_hero")).toBe(true);
     expect(globToRegExp("_ga").test("_gax")).toBe(false);
   });
@@ -59,7 +60,7 @@ describe("applyConsentToPostHog", () => {
     const p = ph(true);
     applyConsentToPostHog(p, readConsent(cookie(), { now: NOW }));
     expect(p.opt_in_capturing).toHaveBeenCalled();
-    expect(p.set_config).toHaveBeenCalledWith({ persistence: "localStorage+cookie" });
+    expect(p.set_config).toHaveBeenCalledWith(expect.objectContaining({ persistence: "localStorage+cookie", advanced_disable_flags: false }));
   });
   it("withdraw opts out, resets, memory only", () => {
     const p = ph(false);
@@ -67,7 +68,8 @@ describe("applyConsentToPostHog", () => {
     expect(p.opt_out_capturing).toHaveBeenCalled();
     expect(p.reset).toHaveBeenCalled();
     expect(p.stopSessionRecording).toHaveBeenCalled();
-    expect(p.set_config).toHaveBeenCalledWith({ persistence: "memory" });
+    expect(p.set_config).toHaveBeenCalledWith(expect.objectContaining({ persistence: "memory", advanced_disable_flags: true }));
+    expect(p.set_config.mock.invocationCallOrder[0]!).toBeLessThan(p.reset.mock.invocationCallOrder[0]!);
   });
   it("already opted out + no consent: untouched", () => {
     const p = ph(true);

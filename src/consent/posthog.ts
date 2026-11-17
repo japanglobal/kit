@@ -25,18 +25,22 @@ export function posthogInitOptions(read?: ReadOptions): {
     : { opt_out_capturing_by_default: true, persistence: "memory" };
 }
 
+const FLAGS_OFF = { advanced_disable_flags: true, advanced_disable_feature_flags: true } as const;
+const FLAGS_ON = { advanced_disable_flags: false, advanced_disable_feature_flags: false } as const;
+
 export function applyConsentToPostHog(ph: PostHogConsentLike, consent: Consent | null): void {
   if (ph.__loaded === false) return;
   if (consent?.personalization) {
-    ph.set_config({ persistence: "localStorage+cookie" });
+    ph.set_config({ persistence: "localStorage+cookie", ...FLAGS_ON });
     if (ph.has_opted_out_capturing()) ph.opt_in_capturing();
     return;
   }
   if (ph.has_opted_out_capturing()) return;
   ph.stopSessionRecording?.();
   ph.opt_out_capturing();
+  // reset() reloads feature flags for the new anonymous id — a request after withdrawal. Flags off first.
+  ph.set_config({ persistence: "memory", ...FLAGS_OFF });
   ph.reset();
-  ph.set_config({ persistence: "memory" });
 }
 
 const DECISIONS = ["cc:onConsent", "cc:onChange"] as const;

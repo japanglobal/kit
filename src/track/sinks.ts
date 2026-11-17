@@ -22,7 +22,8 @@ export type Gtag = (...args: unknown[]) => void;
 export const posthogSink =
   <E extends TrackEvent>(ph: PostHogLike): Sink<E, true> =>
   (e) => {
-    ph.capture(e.name, { ...e.props }, e.uuid ? { uuid: e.uuid } : undefined);
+    if (e.uuid) ph.capture(e.name, { ...e.props }, { uuid: e.uuid });
+    else ph.capture(e.name, { ...e.props });
     return true;
   };
 

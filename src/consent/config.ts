@@ -89,8 +89,11 @@ function translation(c: ConsentSiteConfig, lang: Lang): CC.Translation {
 }
 
 export function defineConsent(c: ConsentSiteConfig): CC.CookieConsentConfig {
+  // reloadPage: a withdrawn category's scripts (gtag, posthog) are already running and would rewrite the
+  // cookies just cleared — reload so nothing non-essential survives the withdrawal.
   const clear = (cat: Category): CC.AutoClear => ({
     cookies: c.vendors[cat].flatMap((v) => (v.cookies ?? []).map((name) => ({ name: globToRegExp(name) }))),
+    reloadPage: true,
   });
   return {
     mode: "opt-in",

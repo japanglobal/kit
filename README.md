@@ -20,7 +20,8 @@ Banner engine: [vanilla-cookieconsent](https://github.com/orestbida/cookieconsen
 // 1. npm i -E @japanglobal/kit
 // 2. root layout:   import "@japanglobal/kit/consent.css";
 // 3. client shell:  <Consent config={{ appName, lang, links: { privacy: "/{lang}/legal/privacy", cookies: "/{lang}/legal/cookies" }, contact, vendors }} posthog={posthog} />
-// 4. posthog.init(key, { ...opts, ...posthogInitOptions() })
+// 4. initWhenConsented(() => posthog.init(key, { ...opts, ...posthogInitOptions({ revision: 1 }) }), { revision: 1 })
+//    (PostHog never starts — no config/flags fetch — before Personalization is granted)
 // 5. export const track = createClientTracker({ appId, posthog, gtag?: { grant, scrub } })   // every emit goes through it
 // 6. app/api/track/route.ts:  export const POST = createTrackRoute({ posthog: posthogNode, appId, getMemberId, after })
 // 7. app/[locale]/legal/[doc]/page.tsx renders src/content/legal/<lang>/<doc>.md with <LegalDocument/>

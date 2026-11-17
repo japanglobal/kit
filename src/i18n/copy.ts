@@ -32,6 +32,7 @@ export interface Copy {
   readonly cookies: string;
   readonly tokushoho: string;
   readonly settings: string;
+  readonly legalNav: string;
 }
 
 export const COPY: Readonly<Record<Lang, Copy>> = {
@@ -66,6 +67,7 @@ export const COPY: Readonly<Record<Lang, Copy>> = {
     cookies: "Cookie policy",
     tokushoho: "Specified Commercial Transactions Act",
     settings: "Cookie settings",
+    legalNav: "Legal",
   },
   ja: {
     title: "Cookieの利用について",
@@ -98,6 +100,7 @@ export const COPY: Readonly<Record<Lang, Copy>> = {
     cookies: "Cookieポリシー",
     tokushoho: "特定商取引法に基づく表記",
     settings: "Cookie設定",
+    legalNav: "法的情報",
   },
 };
 

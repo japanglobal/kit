@@ -43,7 +43,7 @@ export function LegalLinks({ lang, href = "/{lang}/legal/{doc}", tokushoho = fal
   ];
   const A = Link ?? ((p: { href: string; className?: string; children: ReactNode }) => <a {...p} />);
   return (
-    <nav aria-label={t.privacy} className={className}>
+    <nav aria-label={t.legalNav} className={className}>
       {docs.map(([doc, text]) => (
         <A key={doc} href={href.replace("{lang}", lang).replace("{doc}", doc)} className={linkClassName}>
           {text}

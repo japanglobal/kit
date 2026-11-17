@@ -75,3 +75,30 @@ describe("applyConsentToPostHog", () => {
     expect(p.opt_out_capturing).not.toHaveBeenCalled();
   });
 });
+
+describe("initWhenConsented", () => {
+  it("waits for a grant, then inits exactly once; untouched when un-started", async () => {
+    const { initWhenConsented } = await import("../src/consent/posthog.js");
+    const listeners: Record<string, (() => void)[]> = {};
+    let cookieStr = "";
+    vi.stubGlobal("window", {
+      addEventListener: (e: string, f: () => void) => (listeners[e] ??= []).push(f),
+      removeEventListener: (e: string, f: () => void) => (listeners[e] = (listeners[e] ?? []).filter((x) => x !== f)),
+    });
+    vi.stubGlobal("document", { get cookie() { return cookieStr; } });
+    const init = vi.fn();
+    initWhenConsented(init);
+    expect(init).not.toHaveBeenCalled();
+    cookieStr = `cc_cookie=${cookie({ categories: ["necessary"], expirationTime: Date.now() + 1e10 })}`;
+    listeners["cc:onConsent"]?.forEach((f) => f());
+    expect(init).not.toHaveBeenCalled();
+    cookieStr = `cc_cookie=${cookie({ expirationTime: Date.now() + 1e10 })}`;
+    listeners["cc:onChange"]?.forEach((f) => f());
+    listeners["cc:onChange"]?.forEach((f) => f());
+    expect(init).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+    const p = { __loaded: false, opt_in_capturing: vi.fn(), opt_out_capturing: vi.fn(), has_opted_out_capturing: () => false, set_config: vi.fn(), reset: vi.fn() };
+    applyConsentToPostHog(p, null);
+    expect(p.opt_out_capturing).not.toHaveBeenCalled();
+  });
+});

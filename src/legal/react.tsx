@@ -5,13 +5,13 @@
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ReactNode } from "react";
-import { COPY, type Lang } from "../i18n/copy.js";
+import { COPY, countryName, type Lang } from "../i18n/copy.js";
 import type { Category } from "../consent/core.js";
 import type { VendorMap } from "../consent/config.js";
 import { CookieSettingsButton } from "../consent/react.js";
 
-export const LEGAL_DOCS = ["privacy", "terms", "cookies", "tokushoho"] as const;
-export type LegalDoc = (typeof LEGAL_DOCS)[number];
+import type { LegalDoc } from "./docs.js";
+export { LEGAL_DOCS, LEGAL_FILES, type LegalDoc } from "./docs.js";
 
 export function LegalDocument({ markdown, className }: { markdown: string; className?: string }): ReactNode {
   return (
@@ -82,7 +82,7 @@ export function CookieTable({ lang, vendors, className }: { lang: Lang; vendors:
                 <tr key={v.name}>
                   <td>{v.name}</td>
                   <td>{lang === "ja" ? (v.purpose_ja ?? v.purpose) : v.purpose}</td>
-                  <td>{v.country ?? "—"}</td>
+                  <td>{countryName(v.country, lang)}</td>
                   <td>{(v.cookies ?? []).join(", ") || "—"}</td>
                 </tr>
               ))}

@@ -102,3 +102,15 @@ describe("initWhenConsented", () => {
     expect(p.opt_out_capturing).not.toHaveBeenCalled();
   });
 });
+
+describe("countryName + LEGAL_DOCS", () => {
+  it("translates countries for JA, passes unknowns", async () => {
+    const { countryName } = await import("../src/i18n/copy.js");
+    expect(countryName("United States", "ja")).toBe("米国");
+    expect(countryName("Japan, United States", "ja")).toBe("日本、米国");
+    expect(countryName("Narnia", "ja")).toBe("Narnia");
+    expect(countryName(null, "en")).toBe("—");
+    const { LEGAL_DOCS } = await import("../src/legal/docs.js");
+    expect(LEGAL_DOCS).toEqual(["privacy", "terms", "cookies", "tokushoho"]);
+  });
+});

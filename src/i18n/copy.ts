@@ -106,3 +106,17 @@ export const COPY: Readonly<Record<Lang, Copy>> = {
 
 export const fill = (s: string, vars: Readonly<Record<string, string>>): string =>
   s.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
+
+const COUNTRY_JA: Readonly<Record<string, string>> = {
+  Japan: "日本",
+  "United States": "米国",
+  "European Union": "欧州連合",
+  Ireland: "アイルランド",
+  Germany: "ドイツ",
+  Singapore: "シンガポール",
+  "United Kingdom": "英国",
+};
+
+/** Vendor country in the page language; unknown names pass through. */
+export const countryName = (country: string | null | undefined, lang: Lang): string =>
+  !country ? "—" : lang === "ja" ? country.split(/,\s*/).map((c) => COUNTRY_JA[c] ?? c).join("、") : country;

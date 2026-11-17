@@ -5,7 +5,7 @@
  */
 import type * as CC from "vanilla-cookieconsent";
 import { CONSENT_COOKIE, ONE_YEAR_DAYS, type Category } from "./core.js";
-import { COPY, fill, type Lang } from "../i18n/copy.js";
+import { COPY, countryName, fill, type Lang } from "../i18n/copy.js";
 
 export interface Vendor {
   readonly name: string;
@@ -52,7 +52,7 @@ function translation(c: ConsentSiteConfig, lang: Lang): CC.Translation {
           body: c.vendors[cat].map((v) => ({
             name: v.name,
             purpose: lang === "ja" ? (v.purpose_ja ?? v.purpose) : v.purpose,
-            country: v.country ?? "—",
+            country: countryName(v.country, lang),
             cookies: (v.cookies ?? []).join(", ") || "—",
           })),
         };

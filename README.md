@@ -10,6 +10,7 @@ MIT. One package, subpath exports; a new shared module is a new folder, not a ne
 | `@japanglobal/kit/consent/server` | `createTrackRoute` — `POST /api/track` for mandatory events without consent |
 | `@japanglobal/kit/track` | the tracking chain: sinks + `gate` / `map` / `either` / `fanOut` / `label` / `safe` / `pipe`, `consented()`, presets |
 | `@japanglobal/kit/legal` | `<LegalDocument/>`, `<LegalLinks/>`, `<CookieTable/>` |
+| `@japanglobal/kit/legal/docs` | `LEGAL_DOCS`, `LEGAL_FILES` — edge-safe, for proxy route allow-lists |
 | `@japanglobal/kit/consent.css` | banner styles (vanilla-cookieconsent + JGC overrides; theme with `--cc-*`) |
 
 Banner engine: [vanilla-cookieconsent](https://github.com/orestbida/cookieconsent) 3.3.0 (MIT).

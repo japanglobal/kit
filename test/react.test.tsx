@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const run = vi.fn(async (_config: unknown) => undefined);
 const showPreferences = vi.fn();
 const setLanguage = vi.fn(async () => true);
-vi.mock("vanilla-cookieconsent", () => ({ run, showPreferences, setLanguage }));
+const eraseCookies = vi.fn();
+vi.mock("vanilla-cookieconsent", () => ({ run, showPreferences, setLanguage, eraseCookies }));
 
 import { Consent, ConsentGate, CookieSettingsButton, useConsent } from "../src/consent/react.js";
 import { LegalLinks, CookieTable } from "../src/legal/react.js";
@@ -64,5 +65,22 @@ describe("react consent", () => {
     expect(screen.getByText("アクセス解析")).toBeTruthy();
     expect(screen.getByText("ph_*")).toBeTruthy();
     expect(screen.queryByText("tokushoho")).toBeNull();
+  });
+});
+
+describe("withdrawal sweep", () => {
+  it("onConsent with Personalization declined erases its cookies and denies gtag", async () => {
+    run.mockClear();
+    const gtag = vi.fn();
+    (window as unknown as { gtag: unknown }).gtag = gtag;
+    setCookie(cookie({ categories: ["necessary"], expirationTime: Date.now() + 1e10 }));
+    render(<Consent config={{ appName: "Z", lang: "en", links: { privacy: "/p", cookies: "/c" }, contact: "x", vendors: VENDORS }} />);
+    await vi.waitFor(() => expect(run).toHaveBeenCalled());
+    const cfg = run.mock.calls[0]![0] as { onConsent: () => void };
+    cfg.onConsent();
+    const erased = (eraseCookies.mock.calls[0]![0] as RegExp[]).map(String);
+    expect(erased).toContain(String(/^ph_.*$/));
+    expect(erased).toContain(String(/^_fbp$/));
+    expect(gtag).toHaveBeenCalledWith("consent", "update", expect.objectContaining({ analytics_storage: "denied" }));
   });
 });

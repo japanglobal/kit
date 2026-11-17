@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { consentFromDocument, cookieValue, readConsent, type Consent, type OptionalCategory, type ReadOptions } from "./core.js";
-import { defineConsent, type ConsentSiteConfig } from "./config.js";
+import { defineConsent, globToRegExp, type ConsentSiteConfig } from "./config.js";
 import { applyConsentToPostHog, type PostHogConsentLike } from "./posthog.js";
 
 const load = () => import("vanilla-cookieconsent");
@@ -17,6 +17,17 @@ export interface ConsentProps {
   readonly posthog?: PostHogConsentLike | null;
   /** Where `consent_updated` is recorded (server, posthog-node). */
   readonly trackUrl?: string;
+}
+
+/** Google Consent Mode: a running gtag stops writing cookies the moment Personalization is withdrawn. */
+function denyGtag(): void {
+  const gtag = (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag;
+  gtag?.("consent", "update", {
+    ad_storage: "denied",
+    analytics_storage: "denied",
+    ad_user_data: "denied",
+    ad_personalization: "denied",
+  });
 }
 
 function record(url: string, source: "banner" | "settings", gpc: boolean): void {
@@ -33,14 +44,28 @@ export function Consent({ config, posthog = null, trackUrl = "/api/track" }: Con
       if (!live) return;
       const gpc = (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
       const apply = (): void => {
-        if (posthog) applyConsentToPostHog(posthog, consentFromDocument(read));
+        const c = consentFromDocument(read);
+        if (posthog) applyConsentToPostHog(posthog, c);
+        if (c && !c.personalization) denyGtag();
+      };
+      const sweep = (): void => {
+        // A tag can rewrite a cookie after the withdrawal clear (gtag refreshes `_ga_<id>` on unload): every
+        // load with a decision erases the declined categories' cookies again. Stateless, idempotent.
+        const c = consentFromDocument(read);
+        if (!c) return;
+        const declined = (["personalization", "partners"] as const).filter((k) => !c[k]);
+        const names = declined.flatMap((k) => config.vendors[k].flatMap((v) => (v.cookies ?? []).map(globToRegExp)));
+        if (names.length > 0) CC.eraseCookies(names);
       };
       void CC.run(
         defineConsent({
           ...config,
           gpc,
           callbacks: {
-            onConsent: apply,
+            onConsent: () => {
+              apply();
+              sweep();
+            },
             onFirstConsent: () => record(trackUrl, "banner", gpc),
             onChange: () => {
               apply();

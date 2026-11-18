@@ -22,7 +22,14 @@ if (!auditRan(report)) {
   console.log(`jgc-audit: npm audit did not produce a report${report?.error ? ` (${report.error.code ?? ""} ${report.error.summary ?? ""})` : ""} — cannot prove the gate`);
   process.exit(2);
 }
-const allow = existsSync(".audit-allow.json") ? JSON.parse(readFileSync(".audit-allow.json", "utf8")) : [];
+let allow = [];
+try {
+  allow = existsSync(".audit-allow.json") ? JSON.parse(readFileSync(".audit-allow.json", "utf8")) : [];
+  if (!Array.isArray(allow)) throw new Error("not an array");
+} catch (e) {
+  console.log(`jgc-audit: .audit-allow.json is malformed (${e.message}) — cannot prove the gate`);
+  process.exit(2);
+}
 const findings = auditFindings(report, allow, new Date().toISOString().slice(0, 10));
 for (const f of findings) console.log(`${f.allowed ? "allowed" : "FAIL   "} ${f.severity.padEnd(8)} ${f.id} ${f.pkg}: ${f.title}`);
 const bad = findings.filter((f) => !f.allowed);

@@ -70,6 +70,9 @@ export function cloudflareClientIp(h: Headers, key: string | null = originKey())
  */
 export function ipKey(ip: string): string {
   if (!ip.includes(":")) return ip;
+  // IPv4-mapped IPv6 (::ffff:a.b.c.d) is an IPv4 client: key the IPv4, never one shared /64.
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
+  if (mapped) return mapped[1]!;
   const [head = "", tail] = ip.toLowerCase().split("%")[0]!.split("::");
   const h = head ? head.split(":") : [];
   const t = tail !== undefined && tail !== "" ? tail.split(":") : [];

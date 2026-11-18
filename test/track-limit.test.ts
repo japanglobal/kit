@@ -65,6 +65,8 @@ describe("track route throttle (sec.4)", () => {
     expect(ipKey("2001:0db8:0001:0002:ffff:ffff:ffff:ffff")).toBe("2001:db8:1:2::/64");
     expect(ipKey("2001:db8::1")).toBe("2001:db8:0:0::/64");
     expect(ipKey("203.0.113.1")).toBe("203.0.113.1");
+    expect(ipKey("::ffff:203.0.113.1")).toBe("203.0.113.1");
+    expect(ipKey("::FFFF:198.51.100.2")).toBe("198.51.100.2");
     const POST = route({ limit: { requests: 3, windowMs: 60_000 } });
     const codes = [];
     for (let i = 0; i < 5; i++) codes.push((await POST(req({ "x-real-ip": `2001:db8:1:2:${i}::${i + 1}` }))).status);

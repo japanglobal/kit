@@ -5,6 +5,7 @@
 - `@japanglobal/kit/security`: `withSecurity`, `securityHeaders`, `buildCsp`, presets (`gtm`, `ga4`, `googleAds`,
   `metaPixel`, `posthog`, `privy()`, `stripe`, `turnstile`), `checkSecurityHeaders`, `parseCsp`, `origin`.
 - `createTrackRoute`: per-IP throttle (120 / 60 s → 429 + Retry-After) and 8 KiB body cap (413); `limit`, `maxBodyBytes`.
+- `jgc-audit` bin + `auditFindings`: prod audit gate with a dated, reasoned GHSA allowlist (`.audit-allow.json`).
 - `firewall/track-rate-limit.json`: Vercel WAF rule for `vercel firewall rules add --json`.
 - `prepare` builds `dist/`, so a site can pin a git commit before a release is published.
 

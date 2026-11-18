@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+// jgc-audit — website-baseline sec.3 gate: `npm audit --omit=dev`, fail on any high/critical not in .audit-allow.json.
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { auditFindings } from "../dist/security/audit.js";
+
+let raw;
+try {
+  raw = execFileSync("npm", ["audit", "--omit=dev", "--json"], { encoding: "utf8", maxBuffer: 64 << 20 });
+} catch (e) {
+  raw = e.stdout; // npm audit exits 1 when it finds anything
+}
+const allow = existsSync(".audit-allow.json") ? JSON.parse(readFileSync(".audit-allow.json", "utf8")) : [];
+const findings = auditFindings(JSON.parse(raw), allow, new Date().toISOString().slice(0, 10));
+for (const f of findings) console.log(`${f.allowed ? "allowed" : "FAIL   "} ${f.severity.padEnd(8)} ${f.id} ${f.pkg}: ${f.title}`);
+const bad = findings.filter((f) => !f.allowed);
+console.log(bad.length ? `jgc-audit: ${bad.length} high/critical prod advisories` : "jgc-audit: ok");
+process.exit(bad.length ? 1 : 0);

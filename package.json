@@ -32,10 +32,14 @@
   },
   "files": [
     "dist",
+    "bin",
     "firewall",
     "README.md",
     "LICENSE"
   ],
+  "bin": {
+    "jgc-audit": "bin/audit.mjs"
+  },
   "exports": {
     "./consent": {
       "types": "./dist/consent/index.d.ts",

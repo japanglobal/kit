@@ -5,6 +5,8 @@
  */
 import { isDevelopment } from "../env.js";
 
+export { auditFindings, type AllowEntry, type Finding } from "./audit.js";
+
 export type Directive =
   | "script-src"
   | "style-src"

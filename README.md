@@ -139,6 +139,10 @@ export default withSecurity(nextConfig, {
 - `createTrackRoute` throttles per IP (`x-real-ip`, else first `x-forwarded-for`; no IP ⇒ not pooled):
   120 / 60 s → 429 + `Retry-After`; bodies over 8 KiB → 413 before parsing. Options `limit`, `maxBodyBytes`.
 
+- `jgc-audit` (bin): `npm audit --omit=dev`, exit 1 on any high/critical advisory not listed in the site's
+  `.audit-allow.json` — `[{ "id": "GHSA-…", "reason": "<why no fix + why not exploitable here>", "until": "YYYY-MM-DD" }]`.
+  Only for advisories with no patched release; entries expire. CI step: `npx jgc-audit`.
+
 ### Vercel WAF — the global cap (the in-code limiter is per instance)
 
 `firewall/track-rate-limit.json`: POST `/api/track`, 600 / 60 s per IP, exceed action `log`. From the site repo:

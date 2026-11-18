@@ -46,6 +46,12 @@ describe("buildCsp", () => {
     expect(d.get("connect-src")).toEqual(expect.arrayContaining(["https://*.google-analytics.com", "https://*.analytics.google.com"]));
   });
 
+  it("ga4 admits the apex collect host; metaPixel admits the param builder by exact path, never the CDN", () => {
+    const d = parseCsp(buildCsp({ sources: [ga4, metaPixel], dev: false }));
+    expect(d.get("connect-src")).toContain("https://analytics.google.com");
+    expect(d.get("script-src")!.filter((s) => /jsdelivr|unpkg/.test(s)).every((s) => s.endsWith("/clientParamBuilder.bundle.js"))).toBe(true);
+  });
+
   it("privy: custom api domain, wallets, bundlers, telegram on request only", () => {
     const bare = parseCsp(buildCsp({ sources: [privy()], dev: false }));
     expect(bare.get("connect-src")).not.toContain("wss://relay.walletconnect.com");

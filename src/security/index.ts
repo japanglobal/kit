@@ -30,11 +30,19 @@ export const gtm: CspSources = {
   "frame-src": ["https://www.googletagmanager.com"],
 };
 
-/** GA4 via the container's Google tag: collect hits on regional subdomains (Google CSP guide, GA4 section). */
+/**
+ * GA4 via the container's Google tag: collect hits on regional subdomains (Google CSP guide, GA4 section) and on the
+ * apex `analytics.google.com/g/collect` (live probe 2026-11-18 — `*.` never matches the apex).
+ */
 export const ga4: CspSources = {
   "script-src": ["https://*.googletagmanager.com"],
   "img-src": ["https://*.google-analytics.com", "https://*.googletagmanager.com"],
-  "connect-src": ["https://*.google-analytics.com", "https://*.analytics.google.com", "https://*.googletagmanager.com"],
+  "connect-src": [
+    "https://*.google-analytics.com",
+    "https://analytics.google.com",
+    "https://*.analytics.google.com",
+    "https://*.googletagmanager.com",
+  ],
 };
 
 /**
@@ -56,9 +64,17 @@ export const googleAds: CspSources = {
   "frame-src": ["https://td.doubleclick.net"],
 };
 
-/** Meta Pixel tag in the container: fbevents.js + signals config, `/tr` beacons (Meta Pixel developer docs). */
+/**
+ * Meta Pixel tag in the container: fbevents.js + signals config, `/tr` beacons (Meta Pixel developer docs). Its GTM
+ * template also loads Meta's CAPI Parameter Builder (npm `meta-capi-param-builder-clientjs`, published by Meta) from
+ * jsDelivr, unpkg as fallback (live probe 2026-11-18) — admitted by exact file path only, never the CDN host.
+ */
 export const metaPixel: CspSources = {
-  "script-src": ["https://connect.facebook.net"],
+  "script-src": [
+    "https://connect.facebook.net",
+    "https://cdn.jsdelivr.net/npm/meta-capi-param-builder-clientjs/dist/clientParamBuilder.bundle.js",
+    "https://unpkg.com/meta-capi-param-builder-clientjs/dist/clientParamBuilder.bundle.js",
+  ],
   "img-src": ["https://www.facebook.com"],
   "connect-src": ["https://connect.facebook.net", "https://www.facebook.com"],
 };

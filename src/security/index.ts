@@ -112,6 +112,7 @@ export interface PrivyOptions {
 
 /** Privy (Privy docs, "Content Security Policy"; options from the app's live config `auth.privy.io/api/v1/apps/<id>`). */
 export function privy(o: PrivyOptions = {}): CspSources {
+  const api = o.customApiUrl ? [origin(o.customApiUrl)] : [];
   const wc = o.walletConnect
     ? {
         connect: [
@@ -126,18 +127,20 @@ export function privy(o: PrivyOptions = {}): CspSources {
       }
     : { connect: [], frame: [] };
   return {
-    // Privy's modal runs Turnstile when captcha is on (Privy CSP list carries it).
-    "script-src": [...turnstile["script-src"]!, ...(o.telegram ? ["https://telegram.org"] : [])],
+    // Privy's modal runs Turnstile when captcha is on (Privy CSP list carries it). Telegram's widget script is
+    // served from auth.privy.io/js/telegram-login.js (live probe 2026-11-18), then telegram.org.
+    "script-src": [...turnstile["script-src"]!, ...(o.telegram ? ["https://auth.privy.io", "https://telegram.org"] : [])],
     "connect-src": [
       "https://auth.privy.io",
       "https://*.rpc.privy.systems",
-      ...(o.customApiUrl ? [origin(o.customApiUrl)] : []),
+      ...api,
       ...wc.connect,
       ...(o.bundlers ?? []).map(origin),
       ...(o.bridging ? ["https://api.relay.link"] : []),
     ],
-    "frame-src": ["https://auth.privy.io", ...turnstile["frame-src"]!, ...wc.frame, ...(o.telegram ? ["https://oauth.telegram.org"] : [])],
-    "child-src": ["https://auth.privy.io", ...wc.frame],
+    // HttpOnly-cookie mode serves Privy's iframe from the custom API domain too (live probe 2026-11-18).
+    "frame-src": ["https://auth.privy.io", ...api, ...turnstile["frame-src"]!, ...wc.frame, ...(o.telegram ? ["https://oauth.telegram.org"] : [])],
+    "child-src": ["https://auth.privy.io", ...api, ...wc.frame],
   };
 }
 

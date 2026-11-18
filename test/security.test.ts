@@ -65,7 +65,8 @@ describe("buildCsp", () => {
     expect(full.get("connect-src")).toEqual(
       expect.arrayContaining(["https://privy.zucity.org", "wss://relay.walletconnect.org", "https://public.pimlico.io", "https://api.relay.link"]),
     );
-    expect(full.get("frame-src")).toContain("https://oauth.telegram.org");
+    expect(full.get("frame-src")).toEqual(expect.arrayContaining(["https://oauth.telegram.org", "https://privy.zucity.org"]));
+    expect(full.get("script-src")).toEqual(expect.arrayContaining(["https://auth.privy.io", "https://telegram.org"]));
   });
 
   it("origin(): https/wss only", () => {

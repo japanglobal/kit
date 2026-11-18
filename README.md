@@ -137,7 +137,10 @@ export default withSecurity(nextConfig, {
 - `checkSecurityHeaders(headers)` → violations (`[]` = compliant). Accepts fetch `Headers`, a record, or the
   `{ key, value }[]` config form. Sites run it in a unit test on `headers()` and on a live `curl -sI`.
 - `createTrackRoute` throttles per IP (`x-real-ip`, else first `x-forwarded-for`; no IP ⇒ not pooled):
-  120 / 60 s → 429 + `Retry-After`; bodies over 8 KiB → 413 before parsing. Options `limit`, `maxBodyBytes`.
+  120 / 60 s → 429 + `Retry-After`; bodies over 8 KiB → 413 before parsing. Options `limit`, `maxBodyBytes`,
+  `clientIp` — a site behind Cloudflare (proxied DNS in front of Vercel) keys on `cf-connecting-ip`, else every
+  visitor behind one Cloudflare edge shares a bucket. The Vercel WAF rule has the same blind spot: enable Vercel's
+  Verified Proxy for Cloudflare, or rate-limit at Cloudflare instead.
 
 - `jgc-audit` (bin): `npm audit --omit=dev`, exit 1 on any high/critical advisory not listed in the site's
   `.audit-allow.json` — `[{ "id": "GHSA-…", "reason": "<why no fix + why not exploitable here>", "until": "YYYY-MM-DD" }]`.

@@ -27,6 +27,12 @@ export interface TrackRouteOptions {
   readonly limit?: { readonly requests: number; readonly windowMs: number } | false;
   /** Largest accepted body; bigger = 413 before parsing. Default 8 KiB. */
   readonly maxBodyBytes?: number;
+  /**
+   * The throttle key. Default `clientIp` (Vercel's `x-real-ip`). Behind another proxy (Cloudflare in front of
+   * Vercel) Vercel sees the proxy's IP: pass `(h) => h.get("cf-connecting-ip") ?? clientIp(h)` so visitors are not
+   * pooled per edge node. Null = unknown: never pooled.
+   */
+  readonly clientIp?: (headers: Headers) => string | null;
 }
 
 export const TRACK_LIMIT = { requests: 120, windowMs: 60_000 } as const;
@@ -114,7 +120,7 @@ export function createTrackRoute(o: TrackRouteOptions): (req: Request) => Promis
   const limiter = o.limit === false ? null : createLimiter(o.limit ?? TRACK_LIMIT);
   const maxBody = o.maxBodyBytes ?? TRACK_MAX_BODY;
   return async (req) => {
-    const ip = limiter && clientIp(req.headers);
+    const ip = limiter && (o.clientIp ?? clientIp)(req.headers);
     const wait = ip ? limiter!.hit(ip) : 0;
     if (wait) return new Response("rate", { status: 429, headers: { "Retry-After": String(wait) } });
     const text = await readCapped(req, maxBody);

@@ -41,6 +41,14 @@ describe("track route throttle (sec.4)", () => {
     expect(clientIp(new Headers({ "x-forwarded-for": "4.4.4.4, 10.0.0.1" }))).toBe("4.4.4.4");
   });
 
+  it("clientIp option: behind Cloudflare, cf-connecting-ip keys the throttle (edge IPs never pool visitors)", async () => {
+    const POST = route({ limit: { requests: 1, windowMs: 60_000 }, clientIp: (h) => h.get("cf-connecting-ip") ?? clientIp(h) });
+    const edge = { "x-real-ip": "172.70.0.1" };
+    expect((await POST(req({ ...edge, "cf-connecting-ip": "8.8.8.8" }))).status).toBe(204);
+    expect((await POST(req({ ...edge, "cf-connecting-ip": "9.9.9.9" }))).status).toBe(204);
+    expect((await POST(req({ ...edge, "cf-connecting-ip": "8.8.8.8" }))).status).toBe(429);
+  });
+
   it("no IP header: never pooled into one shared bucket", async () => {
     const POST = route({ limit: { requests: 1, windowMs: 60_000 } });
     for (let i = 0; i < 20; i++) expect((await POST(req({}))).status).toBe(204);

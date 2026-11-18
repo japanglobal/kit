@@ -91,8 +91,9 @@ Nothing to configure in the GTM or Meta UIs. Deploy with the env vars and events
   event_id?})` from the `dataLayer` leg, `gtag('set', {user_id})` from `setUserId()`. The Google tag
   executes them as-is: every event reaches GA4 with its params, and `user_id` rides every following hit.
   (A bare `{event: …}` object push reaches no GA4 tag without GTM triggers — the kit never sends one.)
-- **Do NOT add GA4 event tags, Data Layer Variables, or a Meta Pixel tag in GTM** — each one double counts
-  what the kit already sends.
+- **Do NOT add GA4 event tags, Data Layer Variables, or a Meta Pixel tag in GTM — delete any that exist** —
+  each one double counts what the kit already sends (a GA4 Event tag on "all events" sends every gtag event
+  a second time; a Meta tag's `fbq('track')` reaches every pixel the page has initialised).
 - **Meta**: only `NEXT_PUBLIC_META_PIXEL_ID`. `<MetaPixel/>` installs Meta's standard base code
   (fbevents.js, `init`, `PageView`) after consent; fbevents.js itself counts client-side route changes
   (history.pushState) as PageViews. The `meta` leg sends mapped names as standard events:

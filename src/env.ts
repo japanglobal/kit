@@ -13,7 +13,8 @@ export type KitEnvVar =
   | "NEXT_PUBLIC_JGC_LEGAL_PATH"
   | "NEXT_PUBLIC_JGC_TRACK_URL"
   | "NEXT_PUBLIC_JGC_SELLS"
-  | "NEXT_PUBLIC_GTM_ID";
+  | "NEXT_PUBLIC_GTM_ID"
+  | "NEXT_PUBLIC_META_PIXEL_ID";
 
 export interface KitEnv {
   /** `app_id` stamped on every event. Required for tracking. */
@@ -32,6 +33,8 @@ export interface KitEnv {
   readonly sells: boolean;
   /** GTM container id; null = no GTM. */
   readonly gtmId: string | null;
+  /** Meta Pixel (dataset) id; null = no pixel. */
+  readonly metaPixelId: string | null;
 }
 
 export const DEFAULTS = {
@@ -42,6 +45,7 @@ export const DEFAULTS = {
 
 export const APP_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 export const GTM_ID_RE = /^GTM-[A-Z0-9]+$/;
+export const META_PIXEL_ID_RE = /^\d{6,20}$/;
 const EMAIL_RE = /^[^\s@<>"'&]+@[^\s@<>"'&]+\.[^\s@<>"'&]+$/;
 const REVISION_RE = /^[1-9][0-9]{0,8}$/;
 /** Same-origin path: one leading slash (not `//host`), no whitespace, quotes or angle brackets. */
@@ -86,6 +90,7 @@ export function kitEnv(): KitEnv {
     trackUrl: parseTrackUrl(read(() => process.env.NEXT_PUBLIC_JGC_TRACK_URL)),
     sells: read(() => process.env.NEXT_PUBLIC_JGC_SELLS) === "true",
     gtmId: match(GTM_ID_RE, read(() => process.env.NEXT_PUBLIC_GTM_ID)),
+    metaPixelId: match(META_PIXEL_ID_RE, read(() => process.env.NEXT_PUBLIC_META_PIXEL_ID)),
   };
 }
 

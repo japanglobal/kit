@@ -1,7 +1,7 @@
 /** Thin transports. No policy here — policy is gate/map in the chain. */
 import { skip, type Sink, type Skip } from "./core.js";
 import type { TrackEvent } from "./types.js";
-import { dataLayer } from "../gtm/datalayer.js";
+import { dataLayer, gtagOn } from "../gtm/datalayer.js";
 
 export interface PostHogLike {
   capture(name: string, props?: Record<string, unknown>, options?: Record<string, unknown>): unknown;
@@ -35,15 +35,16 @@ export const posthogNodeSink =
   };
 
 /**
- * window.dataLayer push for GTM: `{event, ...props, event_id}` — GA4/Ads/Meta tags in the container fire on it.
- * `event_id` = the event's uuid when it has one (Meta pixel ⇄ CAPI dedup).
+ * GA4 through GTM with zero container config: a gtag `('event', name, {...props, event_id?})` command
+ * (an `arguments` object) on window.dataLayer — the GA4 Google tag in the container sends it as-is.
+ * `event_id` = the event's uuid when it has one (dedup key shared with the Meta Pixel ⇄ CAPI).
  */
 export const dataLayerSink =
   <E extends TrackEvent>(get: () => unknown[] | null = dataLayer): Sink<E, true | Skip> =>
   (e) => {
     const layer = get();
     if (!layer) return skip("no_browser");
-    layer.push({ event: e.name, ...e.props, ...(e.uuid ? { event_id: e.uuid } : {}) });
+    gtagOn(layer, "event", e.name, { ...e.props, ...(e.uuid ? { event_id: e.uuid } : {}) });
     return true;
   };
 

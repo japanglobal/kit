@@ -25,6 +25,7 @@ const ALL: readonly KitEnvVar[] = [
   "NEXT_PUBLIC_JGC_TRACK_URL",
   "NEXT_PUBLIC_JGC_SELLS",
   "NEXT_PUBLIC_GTM_ID",
+  "NEXT_PUBLIC_META_PIXEL_ID",
 ];
 const SITE: Partial<Record<KitEnvVar, string>> = {
   NEXT_PUBLIC_JGC_APP_ID: "zucity",
@@ -35,6 +36,7 @@ const SITE: Partial<Record<KitEnvVar, string>> = {
   NEXT_PUBLIC_JGC_TRACK_URL: "/t",
   NEXT_PUBLIC_JGC_SELLS: "true",
   NEXT_PUBLIC_GTM_ID: "GTM-5V6ZLSZ5",
+  NEXT_PUBLIC_META_PIXEL_ID: "123456789012345",
 };
 const setEnv = (vars: Partial<Record<KitEnvVar, string>>): void => {
   for (const k of ALL) vi.stubEnv(k, vars[k] ?? "");
@@ -63,6 +65,7 @@ describe("kitEnv — parsing", () => {
       trackUrl: "/api/track",
       sells: false,
       gtmId: null,
+      metaPixelId: null,
     });
   });
 
@@ -77,6 +80,7 @@ describe("kitEnv — parsing", () => {
       trackUrl: "/t",
       sells: true,
       gtmId: "GTM-5V6ZLSZ5",
+      metaPixelId: "123456789012345",
     });
   });
 
@@ -112,6 +116,12 @@ describe("kitEnv — parsing", () => {
     ["NEXT_PUBLIC_GTM_ID", "GTM-AB/../x.js", "gtmId", null],
     ["NEXT_PUBLIC_GTM_ID", "GTM-ABC 123", "gtmId", null],
     ["NEXT_PUBLIC_GTM_ID", "GTM-ABC123", "gtmId", "GTM-ABC123"],
+    ["NEXT_PUBLIC_META_PIXEL_ID", "12345", "metaPixelId", null],
+    ["NEXT_PUBLIC_META_PIXEL_ID", "1".repeat(21), "metaPixelId", null],
+    ["NEXT_PUBLIC_META_PIXEL_ID", "12345678x", "metaPixelId", null],
+    ["NEXT_PUBLIC_META_PIXEL_ID", "123456789');alert(1)//", "metaPixelId", null],
+    ["NEXT_PUBLIC_META_PIXEL_ID", "123456", "metaPixelId", "123456"],
+    ["NEXT_PUBLIC_META_PIXEL_ID", "123456789012345", "metaPixelId", "123456789012345"],
   ])("%s=%j → %s %j (invalid = unset, never a throw)", (name, value, key, want) => {
     setEnv({ [name]: value });
     expect(kitEnv()[key]).toEqual(want);
@@ -196,7 +206,10 @@ describe("props override env; missing required ⇒ no-op + one dev error", () =>
     const opts = { posthog: null, dataLayer: { get: () => layer, grant: () => true } };
     createClientTracker<TrackEvent>({ ...opts, consent: granted })({ name: "view_item" });
     createClientTracker<TrackEvent>({ ...opts, consent: granted, appId: "prop" })({ name: "view_item" });
-    expect(layer).toEqual([{ event: "view_item", app_id: "zucity" }, { event: "view_item", app_id: "prop" }]);
+    expect(layer.map((a) => Array.from(a as ArrayLike<unknown>))).toEqual([
+      ["event", "view_item", { app_id: "zucity" }],
+      ["event", "view_item", { app_id: "prop" }],
+    ]);
     createClientTracker<TrackEvent>({ posthog: null, consent: () => null })({ name: "login" });
     expect(beacon.mock.calls[0]![0]).toBe("/t");
     setEnv({});

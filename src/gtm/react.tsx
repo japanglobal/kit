@@ -1,8 +1,9 @@
 "use client";
 /**
  * <GoogleTagManager/> — loads the site's GTM container (NEXT_PUBLIC_GTM_ID, or the `id` prop) only while
- * `category` (default Personalization) is granted. GA4, Ads and Meta live as tags inside the container;
- * the site pushes events with `dataLayerSink`. Withdrawal reloads the page (consent config), so a loaded
+ * `category` (default Personalization) is granted. The container needs only its Google tag (GA4 config):
+ * `dataLayerSink` / `setUserId` push gtag commands it executes with zero GTM setup. Meta is `<MetaPixel/>`,
+ * not a GTM tag. Withdrawal reloads the page (consent config), so a loaded
  * container never outlives the consent. Unset or malformed id ⇒ renders nothing.
  */
 import { useEffect } from "react";

@@ -9,15 +9,21 @@ export function dataLayer(): Layer | null {
   return w.dataLayer;
 }
 
-/** A gtag() command (consent, set, config) on the dataLayer — the shape Google's tags read. */
-export function gtag(...args: unknown[]): void {
-  const layer = dataLayer();
+/**
+ * Push a gtag command onto `layer` as an `arguments` object — the only shape Google's tags execute
+ * (an array or a bare `{event}` object reaches no GA4 tag without GTM UI setup).
+ */
+export function gtagOn(layer: unknown[] | null, ...args: unknown[]): void {
   if (!layer) return;
-  // gtag commands must be pushed as an `arguments` object, not an array.
   (function push(..._a: unknown[]) {
     // eslint-disable-next-line prefer-rest-params
     layer.push(arguments);
   })(...args);
+}
+
+/** A gtag() command (consent, set, event) on window.dataLayer — GA4 in the GTM container reads it with zero config. */
+export function gtag(...args: unknown[]): void {
+  gtagOn(dataLayer(), ...args);
 }
 
 export const CONSENT_GRANTED = {

@@ -43,15 +43,20 @@ describe("client preset — consent × mandatory × plane", () => {
     expect(reports.flat().filter((r) => typeof r === "object" && r && "skipped" in r).length).toBeGreaterThan(events.length);
   });
 
-  it("consent: PostHog and the dataLayer receive everything; no beacon; pushes carry event, app_id, event_id", () => {
+  it("consent: PostHog and the dataLayer receive everything; no beacon; gtag ('event', name, {app_id, event_id?}) Arguments", () => {
     const c = client(GRANTED);
     events.forEach((e) => c.track(e));
     c.track({ name: "purchase", props: { value: 1 }, uuid: "u-1" });
     expect(c.ph.capture).toHaveBeenCalledTimes(events.length + 1);
     expect(c.gtag).toHaveBeenCalledTimes(events.length + 1);
     expect(c.beacon).not.toHaveBeenCalled();
-    expect(c.layer[0]).toMatchObject({ event: events[0]!.name, app_id: "test" });
-    expect(c.layer.at(-1)).toEqual({ event: "purchase", value: 1, app_id: "test", event_id: "u-1" });
+    for (const push of c.layer) {
+      // an `arguments` object — the shape GA4 in GTM executes; never an array, never a bare {event} object
+      expect(Object.prototype.toString.call(push)).toBe("[object Arguments]");
+      expect(push).not.toHaveProperty("event");
+    }
+    expect(Array.from(c.layer[0] as ArrayLike<unknown>)).toEqual(["event", events[0]!.name, { app_id: "test" }]);
+    expect(Array.from(c.layer.at(-1) as ArrayLike<unknown>)).toEqual(["event", "purchase", { value: 1, app_id: "test", event_id: "u-1" }]);
   });
 
   it("the dataLayer leg respects the grant", () => {

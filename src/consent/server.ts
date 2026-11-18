@@ -2,6 +2,7 @@
  * POST /api/track — the server door for mandatory events a browser sends without Personalization consent.
  * Accepts only CLIENT_MANDATORY_EVENTS (consent_updated, login, logout); everything else is 400, so a
  * browser can never forge a commerce fact. Consent facts come from the cookie, never from the body.
+ * Abuse: per-IP throttle (429 + Retry-After) and a body cap (413), both before parsing (website-baseline sec.4).
  */
 import { consentFromHeader, type ReadOptions } from "./core.js";
 import { CLIENT_MANDATORY_EVENTS } from "../track/consent.js";
@@ -19,6 +20,67 @@ export interface TrackRouteOptions {
   readonly accept?: ReadonlySet<string>;
   /** next/server `after`, so the flush outlives the response on serverless. */
   readonly after?: (task: () => unknown) => void;
+  /**
+   * Per-IP throttle (fixed window, per server instance; the Vercel WAF rule in `firewall/` is the global cap).
+   * Default 120 requests / 60 s — headroom for one venue Wi-Fi or mobile CGNAT. `false` = off.
+   */
+  readonly limit?: { readonly requests: number; readonly windowMs: number } | false;
+  /** Largest accepted body; bigger = 413 before parsing. Default 8 KiB. */
+  readonly maxBodyBytes?: number;
+}
+
+export const TRACK_LIMIT = { requests: 120, windowMs: 60_000 } as const;
+export const TRACK_MAX_BODY = 8192;
+/** Most IPs one instance remembers; the oldest window is evicted first. */
+export const LIMITER_MAX_KEYS = 10_000;
+
+/** The client IP Vercel sets (`x-real-ip`, else the first `x-forwarded-for` hop). Null = unknown: never pooled. */
+export function clientIp(h: Headers): string | null {
+  return h.get("x-real-ip")?.trim() || h.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+}
+
+/** Fixed-window counter per key. Returns seconds until retry when over, else 0. */
+export function createLimiter(o: { requests: number; windowMs: number }, maxKeys = LIMITER_MAX_KEYS) {
+  const windows = new Map<string, { start: number; count: number }>();
+  const hit = (key: string, now = Date.now()): number => {
+    let w = windows.get(key);
+    if (!w || now - w.start >= o.windowMs) {
+      windows.delete(key);
+      if (windows.size >= maxKeys) windows.delete(windows.keys().next().value!);
+      w = { start: now, count: 0 };
+      windows.set(key, w);
+    }
+    w.count += 1;
+    return w.count > o.requests ? Math.max(1, Math.ceil((w.start + o.windowMs - now) / 1000)) : 0;
+  };
+  return { hit, size: () => windows.size };
+}
+
+/** The body as text, or null once it passes `max` bytes (stops reading; never buffers more). */
+async function readCapped(req: Request, max: number): Promise<string | null> {
+  const declared = Number(req.headers.get("content-length") ?? 0);
+  if (declared > max) return null;
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
 }
 
 type Prop = string | number | boolean | null;
@@ -49,10 +111,17 @@ export function createTrackRoute(o: TrackRouteOptions): (req: Request) => Promis
   const accept = o.accept ?? CLIENT_MANDATORY_EVENTS;
   const appId = o.appId ?? kitEnv().appId;
   if (!appId) missing("NEXT_PUBLIC_JGC_APP_ID", "The track route");
+  const limiter = o.limit === false ? null : createLimiter(o.limit ?? TRACK_LIMIT);
+  const maxBody = o.maxBodyBytes ?? TRACK_MAX_BODY;
   return async (req) => {
+    const ip = limiter && clientIp(req.headers);
+    const wait = ip ? limiter!.hit(ip) : 0;
+    if (wait) return new Response("rate", { status: 429, headers: { "Retry-After": String(wait) } });
+    const text = await readCapped(req, maxBody);
+    if (text === null) return new Response("size", { status: 413 });
     let body: unknown;
     try {
-      body = await req.json();
+      body = JSON.parse(text);
     } catch {
       return bad("body");
     }

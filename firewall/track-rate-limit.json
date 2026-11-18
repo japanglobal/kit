@@ -1,0 +1,35 @@
+{
+  "name": "jgc: throttle POST /api/track",
+  "description": "Global per-IP cap for the kit track route (website-baseline sec.4). Stage in log mode; enforce after a 7-day read.",
+  "active": true,
+  "conditionGroup": [
+    {
+      "conditions": [
+        {
+          "type": "path",
+          "op": "eq",
+          "value": "/api/track"
+        },
+        {
+          "type": "method",
+          "op": "eq",
+          "value": "POST"
+        }
+      ]
+    }
+  ],
+  "action": {
+    "mitigate": {
+      "action": "rate_limit",
+      "rateLimit": {
+        "algo": "fixed_window",
+        "window": 60,
+        "limit": 600,
+        "keys": [
+          "ip"
+        ],
+        "action": "log"
+      }
+    }
+  }
+}

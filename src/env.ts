@@ -90,6 +90,8 @@ export function kitEnv(): KitEnv {
 }
 
 const isDev = (): boolean => read(() => process.env.NODE_ENV) !== "production";
+/** `next dev` only (not test, not production): the one place a dev-only relaxation may switch on. */
+export const isDevelopment = (): boolean => read(() => process.env.NODE_ENV) === "development";
 const reported = new Set<string>();
 
 /**

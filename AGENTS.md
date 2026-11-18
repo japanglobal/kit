@@ -1,6 +1,7 @@
 # AGENTS.md — @japanglobal/kit
 
-- Law lives in the JGC vault: `docs/software/website-baseline.md` site.17 (how sites use the kit), `docs/legal/` (copy, vendors).
+- Law lives in the JGC vault: `docs/software/website-baseline.md` site.17 (how sites use the kit), sec.* (security
+  headers, CSP presets, throttle), `docs/legal/` (copy, vendors). A CSP origin lands in a preset with its source cited.
 - Policy belongs in predicates/middlewares (`src/track/core.ts`), never inside a sink.
 - Env law: `src/env.ts` is the only module that reads `process.env` — literal `process.env.NEXT_PUBLIC_X`
   reads (bundler inlining), validated, invalid = unset, never a throw. Props beat env. A new variable lands in

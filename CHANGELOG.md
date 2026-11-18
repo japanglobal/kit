@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0 — 2026-11-18
+
+- `@japanglobal/kit/security`: `withSecurity`, `securityHeaders`, `buildCsp`, presets (`gtm`, `ga4`, `googleAds`,
+  `metaPixel`, `posthog`, `privy()`, `stripe`, `turnstile`), `checkSecurityHeaders`, `parseCsp`, `origin`.
+- `createTrackRoute`: per-IP throttle (120 / 60 s → 429 + Retry-After) and 8 KiB body cap (413); `limit`, `maxBodyBytes`.
+- `firewall/track-rate-limit.json`: Vercel WAF rule for `vercel firewall rules add --json`.
+- `prepare` builds `dist/`, so a site can pin a git commit before a release is published.
+
 ## 2.0.0 — 2026-11-18
 
 Breaking: the kit ships no Meta code. The browser loads only PostHog + GTM; Meta runs as the GTM container's

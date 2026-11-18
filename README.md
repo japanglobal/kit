@@ -77,6 +77,8 @@ env: {
 // 7. app/[locale]/legal/[doc]/page.tsx renders src/content/legal/<lang>/<doc>.md with <LegalDocument/>
 // 8. footer: <LegalLinks lang={lang} />
 // 9. vendors + markdown: python3 workflows/legal_render.py sync <app> --repo <site> --strict   (JGC vault)
+// 10. next.config: export default withSecurity(config, { sources: [gtm, ga4, googleAds, metaPixel, posthog] })
+//     + a site test: checkSecurityHeaders(<headers()>) → []   (website-baseline sec.*)
 ```
 
 ## GTM / GA4 / Meta — the browser loads only PostHog + GTM
@@ -115,6 +117,47 @@ const track = fanOut(
 - `MANDATORY_EVENTS` pass without consent only on the first-party product plane, only via the server.
   Ads legs never take an exemption (`createServerTracker` wraps every ads leg in a non-exempt gate).
 - `/api/track` accepts only `consent_updated`, `login`, `logout` from a browser — commerce facts are server-only.
+
+## Security — `@japanglobal/kit/security` (website-baseline sec.*)
+
+```ts
+import { withSecurity, gtm, ga4, googleAds, metaPixel, posthog, privy, stripe } from "@japanglobal/kit/security";
+export default withSecurity(nextConfig, {
+  // an origin enters only through a preset (a feature) or a site-local extra whose comment cites the code that loads it
+  sources: [gtm, ga4, googleAds, metaPixel, posthog, privy({ customApiUrl, walletConnect: true })],
+  reportUri: "/ingest/report/?token=<posthog project key>", // optional: violations land in PostHog
+});
+```
+
+- `withSecurity` keeps the config's own `headers()` entries verbatim, appends CSP, HSTS (2 y, preload), nosniff,
+  `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, Permissions-Policy for `/:path*`,
+  and turns `X-Powered-By` + browser source maps off.
+- CSP base: `default-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`,
+  `frame-ancestors 'none'`. `'unsafe-eval'` only under `next dev` (NODE_ENV=development).
+- `checkSecurityHeaders(headers)` → violations (`[]` = compliant). Accepts fetch `Headers`, a record, or the
+  `{ key, value }[]` config form. Sites run it in a unit test on `headers()` and on a live `curl -sI`.
+- `createTrackRoute` throttles per IP (`x-real-ip`, else first `x-forwarded-for`; no IP ⇒ not pooled):
+  120 / 60 s → 429 + `Retry-After`; bodies over 8 KiB → 413 before parsing. Options `limit`, `maxBodyBytes`.
+
+### Vercel WAF — the global cap (the in-code limiter is per instance)
+
+`firewall/track-rate-limit.json`: POST `/api/track`, 600 / 60 s per IP, exceed action `log`. From the site repo:
+
+```sh
+vercel link
+vercel firewall rules add --json "$(cat node_modules/@japanglobal/kit/firewall/track-rate-limit.json)" --yes
+vercel firewall diff            # review, then a human runs: vercel firewall publish --yes
+# after 7 days of log data (dashboard → Firewall → filter by rule): enforce
+vercel firewall rules edit "jgc: throttle POST /api/track" --rate-limit-action rate_limit --yes && vercel firewall diff
+```
+
+### Residual risk (known, accepted)
+
+- `script-src 'unsafe-inline'`: Next's inline bootstrap on prerendered pages; nonces would force dynamic rendering.
+- Whoever can publish the GTM container runs code on every consented page. GTM Custom JavaScript variables need
+  `eval` and are blocked by this CSP — use Data Layer variables or sandboxed templates.
+- The in-code limiter is per server instance; the WAF rule is the global cap (WAF counters are per region).
+- `img-src https:` is allowed (passive; sites with user/DB-supplied image URLs need it). Code-carrying directives never are.
 
 ## Develop
 

@@ -2,11 +2,12 @@
  * POST /api/track — the server door for mandatory events a browser sends without Personalization consent.
  * Accepts only CLIENT_MANDATORY_EVENTS (consent_updated, login, logout); everything else is 400, so a
  * browser can never forge a commerce fact. Consent facts come from the cookie, never from the body.
+ * Abuse: per-IP throttle (429 + Retry-After) and a body cap (413), both before parsing (website-baseline sec.4).
  */
 import { consentFromHeader, type ReadOptions } from "./core.js";
 import { CLIENT_MANDATORY_EVENTS } from "../track/consent.js";
 import type { PostHogNodeLike } from "../track/sinks.js";
-import { kitEnv, missing } from "../env.js";
+import { kitEnv, missing, originKey } from "../env.js";
 
 export interface TrackRouteOptions {
   readonly posthog: (PostHogNodeLike & { flush?: () => Promise<unknown> }) | null;
@@ -19,6 +20,108 @@ export interface TrackRouteOptions {
   readonly accept?: ReadonlySet<string>;
   /** next/server `after`, so the flush outlives the response on serverless. */
   readonly after?: (task: () => unknown) => void;
+  /**
+   * Per-IP throttle (fixed window, per server instance; the Vercel WAF rule in `firewall/` is the global cap).
+   * Default 120 requests / 60 s — headroom for one venue Wi-Fi or mobile CGNAT. `false` = off.
+   */
+  readonly limit?: { readonly requests: number; readonly windowMs: number } | false;
+  /** Largest accepted body; bigger = 413 before parsing. Default 8 KiB. */
+  readonly maxBodyBytes?: number;
+  /**
+   * The throttle key. Default `clientIp` (Vercel's `x-real-ip`). Behind Cloudflare pass `cloudflareClientIp`, which
+   * trusts `cf-connecting-ip` only with the origin secret. Null = unknown: never pooled.
+   */
+  readonly clientIp?: (headers: Headers) => string | null;
+}
+
+export const TRACK_LIMIT = { requests: 120, windowMs: 60_000 } as const;
+export const TRACK_MAX_BODY = 8192;
+/** Most IPs one instance remembers; the oldest window is evicted first. */
+export const LIMITER_MAX_KEYS = 10_000;
+
+/** The client IP Vercel sets (`x-real-ip`, else the first `x-forwarded-for` hop). Null = unknown: never pooled. */
+export function clientIp(h: Headers): string | null {
+  return h.get("x-real-ip")?.trim() || h.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+}
+
+export const ORIGIN_HEADER = "x-jgc-origin";
+
+/** Constant-time string compare (no early exit on the first differing char). */
+function same(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+/**
+ * The visitor IP for a Cloudflare-proxied site (website-baseline sec.7). `cf-connecting-ip` is trusted only when the
+ * request carries Cloudflare's origin secret (`x-jgc-origin` = JGC_ORIGIN_KEY) — anyone can send the header straight
+ * to the Vercel origin. Otherwise Vercel's own client IP (`clientIp`).
+ */
+export function cloudflareClientIp(h: Headers, key: string | null = originKey()): string | null {
+  const viaCloudflare = key !== null && same(h.get(ORIGIN_HEADER) ?? "", key);
+  return (viaCloudflare && h.get("cf-connecting-ip")?.trim()) || clientIp(h);
+}
+
+/**
+ * The throttle key for an IP: an IPv6 address counts by its /64 (one subscriber's allocation — rotating the low 64
+ * bits must not mint fresh budgets); IPv4 as is.
+ */
+export function ipKey(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  // IPv4-mapped IPv6 (::ffff:a.b.c.d) is an IPv4 client: key the IPv4, never one shared /64.
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
+  if (mapped) return mapped[1]!;
+  const [head = "", tail] = ip.toLowerCase().split("%")[0]!.split("::");
+  const h = head ? head.split(":") : [];
+  const t = tail !== undefined && tail !== "" ? tail.split(":") : [];
+  const full = tail === undefined ? h : [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
+  return `${full.slice(0, 4).map((x) => x.replace(/^0+(?=.)/, "")).join(":")}::/64`;
+}
+
+/** Fixed-window counter per key. Returns seconds until retry when over, else 0. */
+export function createLimiter(o: { requests: number; windowMs: number }, maxKeys = LIMITER_MAX_KEYS) {
+  const windows = new Map<string, { start: number; count: number }>();
+  const hit = (key: string, now = Date.now()): number => {
+    let w = windows.get(key);
+    if (!w || now - w.start >= o.windowMs) {
+      windows.delete(key);
+      if (windows.size >= maxKeys) windows.delete(windows.keys().next().value!);
+      w = { start: now, count: 0 };
+      windows.set(key, w);
+    }
+    w.count += 1;
+    return w.count > o.requests ? Math.max(1, Math.ceil((w.start + o.windowMs - now) / 1000)) : 0;
+  };
+  return { hit, size: () => windows.size };
+}
+
+/** The body as text, or null once it passes `max` bytes (stops reading; never buffers more). */
+async function readCapped(req: Request, max: number): Promise<string | null> {
+  const declared = Number(req.headers.get("content-length") ?? 0);
+  if (declared > max) return null;
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
 }
 
 type Prop = string | number | boolean | null;
@@ -49,10 +152,17 @@ export function createTrackRoute(o: TrackRouteOptions): (req: Request) => Promis
   const accept = o.accept ?? CLIENT_MANDATORY_EVENTS;
   const appId = o.appId ?? kitEnv().appId;
   if (!appId) missing("NEXT_PUBLIC_JGC_APP_ID", "The track route");
+  const limiter = o.limit === false ? null : createLimiter(o.limit ?? TRACK_LIMIT);
+  const maxBody = o.maxBodyBytes ?? TRACK_MAX_BODY;
   return async (req) => {
+    const ip = limiter && (o.clientIp ?? clientIp)(req.headers);
+    const wait = ip ? limiter!.hit(ipKey(ip)) : 0;
+    if (wait) return new Response("rate", { status: 429, headers: { "Retry-After": String(wait) } });
+    const text = await readCapped(req, maxBody);
+    if (text === null) return new Response("size", { status: 413 });
     let body: unknown;
     try {
-      body = await req.json();
+      body = JSON.parse(text);
     } catch {
       return bad("body");
     }

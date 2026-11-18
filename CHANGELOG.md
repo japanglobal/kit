@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.1.0 — 2026-11-18
+
+- `@japanglobal/kit/security`: `withSecurity`, `securityHeaders`, `buildCsp`, presets (`gtm`, `ga4`, `googleAds`,
+  `metaPixel`, `posthog`, `privy()`, `stripe`, `turnstile`), `checkSecurityHeaders`, `parseCsp`, `origin`.
+- `createTrackRoute`: per-IP throttle (120 / 60 s → 429 + Retry-After) and 8 KiB body cap (413); `limit`, `maxBodyBytes`.
+- `jgc-audit` bin + `auditFindings`: prod audit gate with a dated, reasoned GHSA allowlist (`.audit-allow.json`).
+- `firewall/track-rate-limit.json`: Vercel WAF rule for `vercel firewall rules add --json`.
+- Cloudflare origin lock: `firewall/cloudflare-ips.json` + generated `origin-lock-cloudflare-ips.json`,
+  `origin-lock-header.json`, `scripts/cloudflare-firewall.mjs` (`--check` weekly), `jgc-origin-check` bin,
+  `cloudflareClientIp` (trusts `cf-connecting-ip` only with `JGC_ORIGIN_KEY`).
+- `checkSecurityHeaders` also catches host wildcards (`https://*`, `*.com`), keyword case (`'UNSAFE-EVAL'`),
+  scheme-wide `base-uri` / `form-action` / `script-src-attr`.
+- Fail closed: `jgc-origin-check` exits 2 when any direct request or DNS lookup errors (`originVerdict`, tested);
+  `jgc-audit` exits 2 when npm audit produced no report (`auditRan`). Header rule = the enforced origin lock; the
+  IP rule is a logged second signal (Cloudflare tenants share the ranges).
+- `jgc-origin-check`: only 403 + `x-vercel-mitigated: deny` counts as refused; an app 404/405/401/5xx is unproven (2).
+  `jgc-audit`: criticals never allowlistable; `until` must be a real date within a year. Throttle keys IPv6 by /64.
+- `checkSecurityHeaders` flags wildcards over public suffixes (`*.co.jp`, `*.vercel.app`) via the PSL (`tldts`, MIT).
+- `prepare` builds `dist/`, so a site can pin a git commit before a release is published.
+
 ## 2.0.0 — 2026-11-18
 
 Breaking: the kit ships no Meta code. The browser loads only PostHog + GTM; Meta runs as the GTM container's

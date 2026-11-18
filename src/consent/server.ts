@@ -64,6 +64,19 @@ export function cloudflareClientIp(h: Headers, key: string | null = originKey())
   return (viaCloudflare && h.get("cf-connecting-ip")?.trim()) || clientIp(h);
 }
 
+/**
+ * The throttle key for an IP: an IPv6 address counts by its /64 (one subscriber's allocation — rotating the low 64
+ * bits must not mint fresh budgets); IPv4 as is.
+ */
+export function ipKey(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  const [head = "", tail] = ip.toLowerCase().split("%")[0]!.split("::");
+  const h = head ? head.split(":") : [];
+  const t = tail !== undefined && tail !== "" ? tail.split(":") : [];
+  const full = tail === undefined ? h : [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
+  return `${full.slice(0, 4).map((x) => x.replace(/^0+(?=.)/, "")).join(":")}::/64`;
+}
+
 /** Fixed-window counter per key. Returns seconds until retry when over, else 0. */
 export function createLimiter(o: { requests: number; windowMs: number }, maxKeys = LIMITER_MAX_KEYS) {
   const windows = new Map<string, { start: number; count: number }>();
@@ -140,7 +153,7 @@ export function createTrackRoute(o: TrackRouteOptions): (req: Request) => Promis
   const maxBody = o.maxBodyBytes ?? TRACK_MAX_BODY;
   return async (req) => {
     const ip = limiter && (o.clientIp ?? clientIp)(req.headers);
-    const wait = ip ? limiter!.hit(ip) : 0;
+    const wait = ip ? limiter!.hit(ipKey(ip)) : 0;
     if (wait) return new Response("rate", { status: 429, headers: { "Retry-After": String(wait) } });
     const text = await readCapped(req, maxBody);
     if (text === null) return new Response("size", { status: 413 });

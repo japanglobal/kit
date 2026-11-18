@@ -43,15 +43,28 @@ export function auditRan(report: unknown): report is AuditReport {
 
 const GATED = new Set(["high", "critical"]);
 
-/** Root advisories at high/critical, each marked allowed or not (`today` = YYYY-MM-DD). */
+/** A real calendar date `YYYY-MM-DD` (not `9999-99-99`). */
+const realDate = (d: string): boolean => {
+  const t = Date.parse(`${d}T00:00:00Z`);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === d;
+};
+/** Allow entries expire within a year: re-review is the point. */
+const MAX_DAYS = 366;
+
+/**
+ * Root advisories at high/critical, each marked allowed or not (`today` = YYYY-MM-DD). A **critical** is never
+ * allowlistable (sec.3: zero residual criticals); an entry needs a reason and a real `until` within a year.
+ */
 export function auditFindings(report: AuditReport, allow: readonly AllowEntry[], today: string): Finding[] {
-  const ok = new Map(allow.filter((a) => a.reason?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(a.until) && a.until >= today).map((a) => [a.id, a]));
+  const horizon = new Date(Date.parse(`${today}T00:00:00Z`) + MAX_DAYS * 864e5).toISOString().slice(0, 10);
+  const ok = new Map(allow.filter((a) => a.reason?.trim() && realDate(a.until) && a.until >= today && a.until <= horizon).map((a) => [a.id, a]));
   const seen = new Map<string, Finding>();
   for (const v of Object.values(report.vulnerabilities ?? {})) {
     for (const via of v.via ?? []) {
       if (typeof via === "string" || !GATED.has(via.severity ?? "")) continue;
       const id = /GHSA-[\w-]+/.exec(via.url ?? "")?.[0] ?? `npm-${via.source}`;
-      if (!seen.has(id)) seen.set(id, { id, severity: via.severity!, pkg: via.name ?? "?", title: via.title ?? "", allowed: ok.has(id) });
+      const allowed = ok.has(id) && via.severity !== "critical";
+      if (!seen.has(id)) seen.set(id, { id, severity: via.severity!, pkg: via.name ?? "?", title: via.title ?? "", allowed });
     }
   }
   return [...seen.values()];

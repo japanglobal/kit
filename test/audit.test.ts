@@ -23,6 +23,15 @@ describe("auditFindings (sec.3 gate)", () => {
     expect(auditFindings(report, allow, "2027-01-01").every((x) => !x.allowed)).toBe(true);
     expect(auditFindings(report, [{ ...allow[0]!, reason: " " }], "2026-11-18").every((x) => !x.allowed)).toBe(true);
   });
+  it("a critical is never allowlistable", () => {
+    const f = auditFindings(report, [{ id: "GHSA-2464-fhr4-w9xw", reason: "trust me", until: "2026-12-31" }], "2026-11-18");
+    expect(f.find((x) => x.id === "GHSA-2464-fhr4-w9xw")!.allowed).toBe(false);
+  });
+  it("until must be a real date within a year", () => {
+    for (const until of ["9999-99-99", "2026-02-30", "2099-01-01", "20261231"]) {
+      expect(auditFindings(report, [{ ...allow[0]!, until }], "2026-11-18").every((x) => !x.allowed)).toBe(true);
+    }
+  });
   it("clean report: nothing", () => {
     expect(auditFindings({ vulnerabilities: {} }, [], "2026-11-18")).toEqual([]);
   });

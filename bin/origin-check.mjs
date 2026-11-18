@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // jgc-origin-check <domain> [path] — website-baseline sec.7 falsifier: the Vercel origin must refuse a request that
 // skips Cloudflare. Through DNS: expect `server: cloudflare`. Straight at Vercel's edge IPs with Host/SNI = domain:
-// every one must answer 403 (the WAF deny). Fail closed — an answer we could not get is never "locked":
-//   0 = locked (every direct request got a 4xx/5xx) · 0 = domain has no DNS record (public resolvers agree: not live)
-//   1 = ORIGIN OPEN (a direct request got < 400) · 2 = could not prove either (DNS or network error, no Vercel IP).
+// every one must answer 403 + `x-vercel-mitigated: deny` (the WAF deny). Fail closed — anything else is never "locked":
+//   0 = locked (every direct request = firewall deny) · 0 = domain has no DNS record (public resolvers agree: not live)
+//   1 = ORIGIN OPEN (a direct request got < 400) · 2 = unproven (DNS/network error, or an app 4xx/5xx — a 404 is the
+//   origin answering, not a lock).
 import { request } from "node:https";
 import { Resolver } from "node:dns/promises";
 import { originVerdict } from "../dist/security/origin.js";
@@ -37,7 +38,7 @@ const get = (ip) =>
     const lookup = (_h, o, cb) => (o?.all ? cb(null, [{ address: ip, family: 4 }]) : cb(null, ip, 4));
     const req = request({ host: domain, servername: domain, path, method: "GET", timeout: 10_000, agent: false, ...(ip ? { lookup } : {}) }, (res) => {
       res.resume();
-      ok({ status: res.statusCode, server: res.headers.server ?? "", cfRay: Boolean(res.headers["cf-ray"]) });
+      ok({ status: res.statusCode, server: res.headers.server ?? "", cfRay: Boolean(res.headers["cf-ray"]), mitigated: res.headers["x-vercel-mitigated"] });
     });
     req.on("timeout", () => req.destroy(new Error("timeout")));
     req.on("error", (e) => ok({ error: e.code ?? e.message }));
@@ -56,9 +57,10 @@ const vercel = [...new Set(["76.76.21.21", "216.198.79.1", ...resolved])];
 const direct = [];
 for (const ip of vercel) {
   const r = await get(ip);
-  direct.push(r.error ? { error: r.error } : { status: r.status });
-  const note = r.error ? "← no answer (not proof of a lock)" : r.status < 400 ? "← ORIGIN OPEN (bypasses Cloudflare)" : "";
-  console.log(`direct ${ip}: ${r.error ?? `${r.status} server=${r.server}`}  ${note}`);
+  direct.push(r.error ? { error: r.error } : { status: r.status, mitigated: r.mitigated });
+  const deny = r.status === 403 && String(r.mitigated).toLowerCase() === "deny";
+  const note = r.error ? "← no answer (not proof of a lock)" : r.status < 400 ? "← ORIGIN OPEN (bypasses Cloudflare)" : deny ? "(firewall deny)" : "← app answered, not a firewall deny (not proof of a lock)";
+  console.log(`direct ${ip}: ${r.error ?? `${r.status} server=${r.server}${r.mitigated ? ` x-vercel-mitigated=${r.mitigated}` : ""}`}  ${note}`);
 }
 const v = originVerdict(own, direct);
 console.log(`${domain}: ${v.code === 0 ? "origin locked" : v.code === 1 ? "ORIGIN OPEN" : "cannot prove the lock"} (${v.why})`);

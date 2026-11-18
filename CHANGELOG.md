@@ -15,6 +15,8 @@
 - Fail closed: `jgc-origin-check` exits 2 when any direct request or DNS lookup errors (`originVerdict`, tested);
   `jgc-audit` exits 2 when npm audit produced no report (`auditRan`). Header rule = the enforced origin lock; the
   IP rule is a logged second signal (Cloudflare tenants share the ranges).
+- `jgc-origin-check`: only 403 + `x-vercel-mitigated: deny` counts as refused; an app 404/405/401/5xx is unproven (2).
+  `jgc-audit`: criticals never allowlistable; `until` must be a real date within a year. Throttle keys IPv6 by /64.
 - `checkSecurityHeaders` flags wildcards over public suffixes (`*.co.jp`, `*.vercel.app`) via the PSL (`tldts`, MIT).
 - `prepare` builds `dist/`, so a site can pin a git commit before a release is published.
 

@@ -139,12 +139,13 @@ export default withSecurity(nextConfig, {
   `{ key, value }[]` config form. Sites run it in a unit test on `headers()` and on a live `curl -sI`.
 - `createTrackRoute` throttles per IP (`x-real-ip`, else first `x-forwarded-for`; no IP ⇒ not pooled):
   120 / 60 s → 429 + `Retry-After`; bodies over 8 KiB → 413 before parsing. Options `limit`, `maxBodyBytes`,
-  `clientIp` — a Cloudflare-proxied site passes `cloudflareClientIp`: `cf-connecting-ip` only when the request
+  `clientIp` (IPv6 counts by its /64) — a Cloudflare-proxied site passes `cloudflareClientIp`: `cf-connecting-ip` only when the request
   carries the origin secret (`x-jgc-origin` = `JGC_ORIGIN_KEY`), else Vercel's client IP.
 
 - `jgc-audit` (bin): `npm audit --omit=dev`, exit 1 on any high/critical advisory not listed in the site's
   `.audit-allow.json` — `[{ "id": "GHSA-…", "reason": "<why no fix + why not exploitable here>", "until": "YYYY-MM-DD",
-  "followup": "<issue URL>" }]`. Only for advisories with no patched release; entries expire. Exit 2 when npm audit
+  "followup": "<issue URL>" }]`. Only for advisories with no patched release; `until` is a real date within a year;
+  a **critical is never allowlistable**. Exit 2 when npm audit
   produced no report (registry unreachable, no lockfile) — never a pass. CI step: `npx jgc-audit`.
 
 ### Vercel WAF — the global cap (the in-code limiter is per instance)
@@ -184,8 +185,9 @@ would make an IP allowlist deny everyone. The IP rule stays as a logged second s
    --yes`, publish. Keep the IP rule in log mode. Both exempt `/api/cron/` (Vercel Cron calls the deployment directly;
    the route must fail closed on `CRON_SECRET`) and `/.well-known/`.
 5. **Prove it**: `npx jgc-origin-check <domain>` — requests the Vercel edge IPs directly with Host/SNI = the domain.
-   Exit 0 = every one refused (or the domain has no DNS record on public resolvers) · 1 = ORIGIN OPEN · 2 = unproven
-   (DNS or network error) — never a pass. Run it after every firewall change and on a schedule.
+   Exit 0 = every one is a Vercel firewall deny (403 + `x-vercel-mitigated: deny`), or the domain has no DNS record on
+   public resolvers · 1 = ORIGIN OPEN (< 400) · 2 = unproven (DNS/network error, or an app 4xx/5xx — a 404 is the
+   origin answering) — never a pass. Run it after every firewall change and on a schedule.
 
 Cloudflare's ranges live in `firewall/cloudflare-ips.json` (`npm run firewall:cloudflare` regenerates it and the IP
 rule; the weekly `cloudflare-ranges` workflow goes red on drift → release the kit, re-stage the rule). Global rate

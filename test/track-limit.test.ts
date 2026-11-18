@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { clientIp, cloudflareClientIp, createLimiter, createTrackRoute, TRACK_LIMIT } from "../src/consent/server.js";
+import { clientIp, cloudflareClientIp, createLimiter, createTrackRoute, ipKey, TRACK_LIMIT } from "../src/consent/server.js";
 import { cookie } from "./fixtures.js";
 
 const CC = (id: string) => `cc_cookie=${cookie({ expirationTime: Date.now() + 1e10, consentId: id })}`;
@@ -57,6 +57,17 @@ describe("track route throttle (sec.4)", () => {
     const POST = route({ limit: { requests: 3, windowMs: 60_000 }, clientIp: (h) => cloudflareClientIp(h, key) });
     const codes = [];
     for (let i = 0; i < 5; i++) codes.push((await POST(req({ "x-real-ip": "6.6.6.6", "cf-connecting-ip": `10.1.0.${i}` }))).status);
+    expect(codes).toEqual([204, 204, 204, 429, 429]);
+  });
+
+  it("IPv6 counts by /64: rotating the interface id does not mint fresh budgets", async () => {
+    expect(ipKey("2001:db8:1:2:aaaa::1")).toBe("2001:db8:1:2::/64");
+    expect(ipKey("2001:0db8:0001:0002:ffff:ffff:ffff:ffff")).toBe("2001:db8:1:2::/64");
+    expect(ipKey("2001:db8::1")).toBe("2001:db8:0:0::/64");
+    expect(ipKey("203.0.113.1")).toBe("203.0.113.1");
+    const POST = route({ limit: { requests: 3, windowMs: 60_000 } });
+    const codes = [];
+    for (let i = 0; i < 5; i++) codes.push((await POST(req({ "x-real-ip": `2001:db8:1:2:${i}::${i + 1}` }))).status);
     expect(codes).toEqual([204, 204, 204, 429, 429]);
   });
 

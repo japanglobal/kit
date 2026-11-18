@@ -51,7 +51,7 @@ clients from its own `NEXT_PUBLIC_POSTHOG_KEY` / host and passes the instances (
 - **Legal pages + footer** (`<LegalLinks/>`, `<LegalDocument/>`, `<CookieTable/>`): nothing required.
   Optional: `NEXT_PUBLIC_JGC_LEGAL_PATH`, `NEXT_PUBLIC_JGC_SELLS=true` for sites that sell.
 
-## Install (every JGC site — website-baseline site.17)
+## Install (every JGC site — website-baseline site.18)
 
 ```ts
 // next.config — committed defaults, a deploy env var still overrides:

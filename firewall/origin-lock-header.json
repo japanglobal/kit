@@ -1,6 +1,6 @@
 {
   "name": "jgc: origin lock — Cloudflare origin secret",
-  "description": "website-baseline sec.7: production requests without the header Cloudflare's Transform Rule adds are bypassing Cloudflare. Works whether or not Vercel's Verified Proxy rewrites client IPs. Substitute ${JGC_ORIGIN_KEY} at add time; never commit the secret. Stage in log mode first.",
+  "description": "website-baseline sec.7: production requests without the header Cloudflare's Transform Rule adds are bypassing Cloudflare. The enforced lock (works whether or not Vercel's Verified Proxy rewrites client IPs; a Cloudflare IP alone proves nothing). Substitute ${JGC_ORIGIN_KEY} at add time; never commit the secret. Stage in log mode, then deny.",
   "active": true,
   "conditionGroup": [
     {

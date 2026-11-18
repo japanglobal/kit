@@ -12,6 +12,10 @@
   `cloudflareClientIp` (trusts `cf-connecting-ip` only with `JGC_ORIGIN_KEY`).
 - `checkSecurityHeaders` also catches host wildcards (`https://*`, `*.com`), keyword case (`'UNSAFE-EVAL'`),
   scheme-wide `base-uri` / `form-action` / `script-src-attr`.
+- Fail closed: `jgc-origin-check` exits 2 when any direct request or DNS lookup errors (`originVerdict`, tested);
+  `jgc-audit` exits 2 when npm audit produced no report (`auditRan`). Header rule = the enforced origin lock; the
+  IP rule is a logged second signal (Cloudflare tenants share the ranges).
+- `checkSecurityHeaders` flags wildcards over public suffixes (`*.co.jp`, `*.vercel.app`) via the PSL (`tldts`, MIT).
 - `prepare` builds `dist/`, so a site can pin a git commit before a release is published.
 
 ## 2.0.0 — 2026-11-18

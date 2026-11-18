@@ -143,8 +143,9 @@ export default withSecurity(nextConfig, {
   carries the origin secret (`x-jgc-origin` = `JGC_ORIGIN_KEY`), else Vercel's client IP.
 
 - `jgc-audit` (bin): `npm audit --omit=dev`, exit 1 on any high/critical advisory not listed in the site's
-  `.audit-allow.json` — `[{ "id": "GHSA-…", "reason": "<why no fix + why not exploitable here>", "until": "YYYY-MM-DD" }]`.
-  Only for advisories with no patched release; entries expire. CI step: `npx jgc-audit`.
+  `.audit-allow.json` — `[{ "id": "GHSA-…", "reason": "<why no fix + why not exploitable here>", "until": "YYYY-MM-DD",
+  "followup": "<issue URL>" }]`. Only for advisories with no patched release; entries expire. Exit 2 when npm audit
+  produced no report (registry unreachable, no lockfile) — never a pass. CI step: `npx jgc-audit`.
 
 ### Vercel WAF — the global cap (the in-code limiter is per instance)
 
@@ -161,26 +162,30 @@ vercel firewall rules edit "jgc: throttle POST /api/track" --rate-limit-action r
 ### Cloudflare origin lock (every JGC site — website-baseline sec.7)
 
 Every site runs behind Cloudflare (proxied DNS, SSL **Full (strict)**), and its Vercel origin answers only
-Cloudflare. Vercel has no TCP firewall, so the lock is a WAF rule — two, because Vercel's Verified Proxy (on by
-default for Cloudflare) may rewrite the client IP to the visitor's, which would make an IP allowlist deny everyone:
+Cloudflare. Vercel has no TCP firewall, so the lock is a WAF rule. **The enforced lock is the secret header**: an IP
+allowlist cannot be the lock on its own — every Cloudflare customer (a Worker on any account) egresses from the same
+ranges, and Vercel's Verified Proxy (on by default for Cloudflare) may rewrite the client IP to the visitor's, which
+would make an IP allowlist deny everyone. The IP rule stays as a logged second signal.
 
-1. **Secret header** (works either way). Cloudflare → Rules → Transform Rules → *Modify request header*: set
-   `x-jgc-origin` = a random ≥ 32-char secret on all requests to the zone. Vercel env (server-only): `JGC_ORIGIN_KEY`
-   = the same secret (lets `cloudflareClientIp` trust `cf-connecting-ip`).
+1. **Secret header.** Cloudflare → Rules → Transform Rules → *Modify request header*: set `x-jgc-origin` = a random
+   ≥ 32-char secret on all requests to the zone. Vercel env (server-only): `JGC_ORIGIN_KEY` = the same secret (lets
+   `cloudflareClientIp` trust `cf-connecting-ip`). Rotate both together.
 2. **Stage both rules in log mode** from the site repo:
    ```sh
    vercel link
    R=node_modules/@japanglobal/kit/firewall
-   vercel firewall rules add --json "$(cat $R/origin-lock-cloudflare-ips.json)" --yes
    vercel firewall rules add --json "$(sed "s/\${JGC_ORIGIN_KEY}/$JGC_ORIGIN_KEY/" $R/origin-lock-header.json)" --yes
+   vercel firewall rules add --json "$(cat $R/origin-lock-cloudflare-ips.json)" --yes
    vercel firewall diff   # a human publishes: vercel firewall publish --yes
    ```
-3. **Read 7 days** (dashboard → Firewall → filter by rule). The header rule should match only bypass traffic. If the
-   IP rule also matches real visitors, Vercel rewrote client IPs — remove it and keep the header rule.
-4. **Enforce**: `vercel firewall rules edit "<rule>" --action deny --yes`, publish. Both rules exempt `/api/cron/`
-   (Vercel Cron calls the deployment directly; the route must fail closed on `CRON_SECRET`) and `/.well-known/`.
-5. **Prove it**: `npx jgc-origin-check <domain>` — requests the Vercel edge IPs directly with Host/SNI = the domain;
-   exit 1 while any answers. Run it after every firewall change and on a schedule.
+3. **Read 7 days** (dashboard → Firewall → filter by rule): the header rule must match only bypass traffic (no real
+   visitor, no Cloudflare-routed request). The IP rule's hits tell you whether Vercel sees Cloudflare's IPs.
+4. **Enforce the header rule**: `vercel firewall rules edit "jgc: origin lock — Cloudflare origin secret" --action deny
+   --yes`, publish. Keep the IP rule in log mode. Both exempt `/api/cron/` (Vercel Cron calls the deployment directly;
+   the route must fail closed on `CRON_SECRET`) and `/.well-known/`.
+5. **Prove it**: `npx jgc-origin-check <domain>` — requests the Vercel edge IPs directly with Host/SNI = the domain.
+   Exit 0 = every one refused (or the domain has no DNS record on public resolvers) · 1 = ORIGIN OPEN · 2 = unproven
+   (DNS or network error) — never a pass. Run it after every firewall change and on a schedule.
 
 Cloudflare's ranges live in `firewall/cloudflare-ips.json` (`npm run firewall:cloudflare` regenerates it and the IP
 rule; the weekly `cloudflare-ranges` workflow goes red on drift → release the kit, re-stage the rule). Global rate

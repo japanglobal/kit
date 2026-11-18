@@ -112,6 +112,12 @@ describe("checkSecurityHeaders (catch rate on planted positives)", () => {
     ["base-uri https:", swap("Content-Security-Policy", csp().replace("base-uri 'self'", "base-uri https:"))],
     ["form-action https:", swap("Content-Security-Policy", csp().replace("form-action 'self'", "form-action https:"))],
     ["HTTPS: in connect-src", swap("Content-Security-Policy", csp().replace("connect-src 'self'", "connect-src 'self' HTTPS:"))],
+    // evaluator iteration-2 plants: wildcards over multi-label / private public suffixes
+    ["connect-src https://*.co.jp", swap("Content-Security-Policy", csp().replace("connect-src 'self'", "connect-src 'self' https://*.co.jp"))],
+    ["script-src *.co.uk", swap("Content-Security-Policy", csp().replace("script-src 'self'", "script-src 'self' *.co.uk"))],
+    ["script-src *.com.", swap("Content-Security-Policy", csp().replace("script-src 'self'", "script-src 'self' *.com."))],
+    ["frame-src https://*.vercel.app", swap("Content-Security-Policy", csp().replace("frame-src 'self'", "frame-src 'self' https://*.vercel.app"))],
+    ["img-src https://*.com.au", swap("Content-Security-Policy", csp().replace("img-src 'self'", "img-src 'self' https://*.com.au"))],
     ["script-src-attr unsafe-eval", swap("Content-Security-Policy", `${csp()}; script-src-attr 'unsafe-eval'`)],
   ];
   it.each(planted)("catches %s", (_, h) => {
@@ -123,6 +129,11 @@ describe("checkSecurityHeaders (catch rate on planted positives)", () => {
     const devSet = securityHeaders({ sources: SITE, dev: true });
     expect(checkSecurityHeaders(devSet)).toContain("csp: script-src 'unsafe-eval'");
     expect(checkSecurityHeaders(devSet, { dev: true })).toEqual([]);
+  });
+
+  it("a wildcard under a registrable domain is fine (*.example.co.jp, *.tiles.mapbox.com)", () => {
+    const h = securityHeaders({ sources: [{ "connect-src": ["https://*.example.co.jp", "https://*.tiles.mapbox.com"] }], dev: false });
+    expect(checkSecurityHeaders(h)).toEqual([]);
   });
 
   it("reads fetch Headers too", () => {

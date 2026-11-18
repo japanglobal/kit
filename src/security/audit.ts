@@ -27,6 +27,18 @@ interface Via {
 }
 interface AuditReport {
   vulnerabilities?: Record<string, { via?: (string | Via)[] }>;
+  metadata?: { vulnerabilities?: Record<string, number> };
+  error?: unknown;
+}
+
+/**
+ * The audit really ran: npm answered with a report (its `metadata.vulnerabilities` counts), not an error object
+ * (registry unreachable, ENOLOCK, auth). A report we could not get is never "ok".
+ */
+export function auditRan(report: unknown): report is AuditReport {
+  if (typeof report !== "object" || report === null) return false;
+  const r = report as AuditReport;
+  return r.error === undefined && typeof r.vulnerabilities === "object" && typeof r.metadata?.vulnerabilities === "object";
 }
 
 const GATED = new Set(["high", "critical"]);

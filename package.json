@@ -10,6 +10,7 @@
   "dependencies": {
     "react-markdown": "10.1.0",
     "remark-gfm": "4.0.1",
+    "tldts": "7.5.4",
     "vanilla-cookieconsent": "3.3.0"
   },
   "devDependencies": {
@@ -95,9 +96,9 @@
     "firewall:cloudflare": "node scripts/cloudflare-firewall.mjs"
   },
   "peerDependencies": {
-    "react": ">=19",
     "posthog-js": ">=1.200",
-    "posthog-node": ">=5"
+    "posthog-node": ">=5",
+    "react": ">=19"
   },
   "peerDependenciesMeta": {
     "posthog-js": {

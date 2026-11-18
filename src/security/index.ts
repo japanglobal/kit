@@ -3,9 +3,11 @@
  * adds the header set; the CSP starts at 'self' and an origin enters only through a preset (a feature) or a cited
  * site-local `extra`. `checkSecurityHeaders` is the falsifier: site tests and live probes run it on real headers.
  */
+import { getPublicSuffix } from "tldts";
 import { isDevelopment } from "../env.js";
 
-export { auditFindings, type AllowEntry, type Finding } from "./audit.js";
+export { auditFindings, auditRan, type AllowEntry, type Finding } from "./audit.js";
+export { originVerdict, type DnsResult, type Direct } from "./origin.js";
 
 export type Directive =
   | "script-src"
@@ -304,13 +306,22 @@ export function checkSecurityHeaders(h: Headers | Record<string, string> | reado
       for (const raw of vals) {
         const v = raw.toLowerCase(); // CSP keywords and schemes are case-insensitive
         if (v === "'unsafe-eval'" && !o.dev) out.push(`csp: ${d} 'unsafe-eval'`);
-        if (WIDE_HOST.test(v)) out.push(`csp: ${d} ${raw} (wildcard host)`);
+        if (WIDE_HOST.test(v) || wildcardOverSuffix(v)) out.push(`csp: ${d} ${raw} (wildcard host)`);
         if (!STRICT.includes(d)) continue;
         if (/^(https?|wss?|data|blob|ftp|filesystem):$/.test(v) && !(v === "blob:" && ["worker-src", "child-src"].includes(d))) out.push(`csp: ${d} ${raw} (scheme-wide)`);
       }
     }
   }
   return out;
+}
+
+/** `*.co.jp`, `https://*.vercel.app`, `*.com.` — a wildcard directly over a public suffix (Public Suffix List, private
+ * suffixes included: `*.vercel.app` admits every Vercel tenant). `*.example.co.jp` is fine. */
+function wildcardOverSuffix(source: string): boolean {
+  const host = source.replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/[:/].*$/, "").replace(/\.$/, "");
+  if (!host.startsWith("*.")) return false;
+  const rest = host.slice(2);
+  return getPublicSuffix(rest, { allowPrivateDomains: true }) === rest;
 }
 
 function lookup(h: Headers | Record<string, string> | readonly Header[]): (k: string) => string | undefined {

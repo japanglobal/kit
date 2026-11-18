@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auditFindings } from "../src/security/audit.js";
+import { auditFindings, auditRan } from "../src/security/audit.js";
 
 const report = {
   vulnerabilities: {
@@ -25,5 +25,20 @@ describe("auditFindings (sec.3 gate)", () => {
   });
   it("clean report: nothing", () => {
     expect(auditFindings({ vulnerabilities: {} }, [], "2026-11-18")).toEqual([]);
+  });
+});
+
+describe("auditRan — the gate fails closed", () => {
+  it("a real report ran (even with zero findings)", () => {
+    expect(auditRan({ vulnerabilities: {}, metadata: { vulnerabilities: { high: 0 } } })).toBe(true);
+  });
+  it.each([
+    ["registry unreachable", { error: { code: "ENOTFOUND", summary: "request to registry failed" } }],
+    ["no lockfile", { error: { code: "ENOLOCK" } }],
+    ["empty object", {}],
+    ["not JSON", null],
+    ["missing metadata", { vulnerabilities: {} }],
+  ])("%s → did not run", (_, r) => {
+    expect(auditRan(r)).toBe(false);
   });
 });

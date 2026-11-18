@@ -94,3 +94,13 @@ describe("server preset — ads legs are never exempt", () => {
     expect(ph.capture).toHaveBeenCalled();
   });
 });
+
+describe("mandatory lists are pinned (a change here is a legal change — update the privacy policy's service-events sentence)", () => {
+  it("MANDATORY_EVENTS / CLIENT_MANDATORY_EVENTS", async () => {
+    const { CLIENT_MANDATORY_EVENTS } = await import("../src/track/consent.js");
+    expect([...MANDATORY_EVENTS].sort()).toEqual(
+      ["consent_updated", "login", "logout", "purchase", "referral_attributed", "refund", "sign_up", "stay_redeemed"],
+    );
+    expect([...CLIENT_MANDATORY_EVENTS].sort()).toEqual(["consent_updated", "login", "logout"]);
+  });
+});

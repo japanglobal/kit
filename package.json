@@ -1,6 +1,6 @@
 {
   "name": "@japanglobal/kit",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "private": false,
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,7 @@
     "typescript": "5.9.3",
     "vitest": "4.1.0"
   },
-  "description": "Shared code for Japan Global Council websites: cookie consent, consent-gated tracking chain (PostHog, GA4 via GTM, Meta Pixel), legal pages.",
+  "description": "Shared code for Japan Global Council websites: cookie consent, consent-gated tracking chain (PostHog, GTM — GA4 and Meta via the container), legal pages.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/japanglobal/kit.git"
@@ -70,14 +70,6 @@
     "./gtm/react": {
       "types": "./dist/gtm/react.d.ts",
       "default": "./dist/gtm/react.js"
-    },
-    "./meta": {
-      "types": "./dist/meta/index.d.ts",
-      "default": "./dist/meta/index.js"
-    },
-    "./meta/react": {
-      "types": "./dist/meta/react.d.ts",
-      "default": "./dist/meta/react.js"
     },
     "./env": {
       "types": "./dist/env.d.ts",

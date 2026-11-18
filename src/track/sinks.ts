@@ -37,7 +37,7 @@ export const posthogNodeSink =
 /**
  * GA4 through GTM with zero container config: a gtag `('event', name, {...props, event_id?})` command
  * (an `arguments` object) on window.dataLayer — the GA4 Google tag in the container sends it as-is.
- * `event_id` = the event's uuid when it has one (dedup key shared with the Meta Pixel ⇄ CAPI).
+ * `event_id` = the event's uuid when it has one (a dedup key the site can reuse server-side).
  */
 export const dataLayerSink =
   <E extends TrackEvent>(get: () => unknown[] | null = dataLayer): Sink<E, true | Skip> =>

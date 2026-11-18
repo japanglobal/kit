@@ -11,8 +11,6 @@ MIT. One package, subpath exports; a new shared module is a new folder, not a ne
 | `@japanglobal/kit/track` | the tracking chain: sinks + `gate` / `map` / `either` / `fanOut` / `label` / `safe` / `pipe`, `consented()`, presets |
 | `@japanglobal/kit/gtm/react` | `<GoogleTagManager/>` — loads the GTM container only while Personalization is granted |
 | `@japanglobal/kit/gtm` | `dataLayer()`, `gtag()` (gtag commands as `arguments`), `setUserId()` (consent-gated GA4 `user_id`) |
-| `@japanglobal/kit/meta/react` | `<MetaPixel/>` — installs the Meta Pixel only while Personalization is granted |
-| `@japanglobal/kit/meta` | `metaPixelSink`, `META_STANDARD_EVENTS` (canonical → Meta standard event), `installMetaPixel`, `fbq()` |
 | `@japanglobal/kit/legal` | `<LegalDocument/>`, `<LegalLinks/>`, `<CookieTable/>` |
 | `@japanglobal/kit/legal/docs` | `LEGAL_DOCS`, `LEGAL_FILES` — edge-safe, for proxy route allow-lists |
 | `@japanglobal/kit/consent.css` | banner styles (vanilla-cookieconsent + JGC overrides; theme with `--cc-*`) |
@@ -38,7 +36,6 @@ off and logs one `console.error` naming the variable (development only).
 | `NEXT_PUBLIC_JGC_TRACK_URL` | client | no (same-origin path) | `/api/track` | `track`: `createClientTracker` mandatory beacon · `consent/react`: `<Consent/>` consent record |
 | `NEXT_PUBLIC_JGC_SELLS` | client | no (`"true"` = on) | off | `legal`: `<LegalLinks/>` shows the 特商法 link |
 | `NEXT_PUBLIC_GTM_ID` | client | **yes, for GTM** (`^GTM-[A-Z0-9]+$`) | — (no GTM) | `gtm/react`: `<GoogleTagManager/>` |
-| `NEXT_PUBLIC_META_PIXEL_ID` | client | no — optional (`^\d{6,20}$`, the Meta dataset/pixel id) | — (no pixel, silently). Any value failing the pattern — e.g. `off` — is unset too: a site that defaults the id in its config turns the pixel off with `NEXT_PUBLIC_META_PIXEL_ID=off` | `meta/react`: `<MetaPixel/>` |
 
 Not env, on purpose: **PostHog keys stay site-owned** — the site creates its posthog-js / posthog-node
 clients from its own `NEXT_PUBLIC_POSTHOG_KEY` / host and passes the instances (`posthog` props). The
@@ -50,8 +47,8 @@ clients from its own `NEXT_PUBLIC_POSTHOG_KEY` / host and passes the instances (
   `vendors` prop, `consent.css`. Optional: `_CONSENT_REVISION`, `_LEGAL_PATH`, `_TRACK_URL`.
 - **Tracking** (`createClientTracker`, `createServerTracker`, `createTrackRoute`): `NEXT_PUBLIC_JGC_APP_ID`
   + the site's PostHog instance. Optional: `_CONSENT_REVISION`, `_TRACK_URL` (must match the route's path).
-- **GTM / GA4** (`<GoogleTagManager/>`): `NEXT_PUBLIC_GTM_ID`. Loads only after Personalization consent.
-- **Meta Pixel** (`<MetaPixel/>`): `NEXT_PUBLIC_META_PIXEL_ID`. Loads only after Personalization consent.
+- **GTM — GA4 + Meta** (`<GoogleTagManager/>`): `NEXT_PUBLIC_GTM_ID`. Loads only after Personalization
+  consent. Meta needs no variable: it is the container's Meta Pixel tag.
 - **Legal pages + footer** (`<LegalLinks/>`, `<LegalDocument/>`, `<CookieTable/>`): nothing required.
   Optional: `NEXT_PUBLIC_JGC_LEGAL_PATH`, `NEXT_PUBLIC_JGC_SELLS=true` for sites that sell.
 
@@ -71,10 +68,10 @@ env: {
 ```tsx
 // 1. npm i -E @japanglobal/kit
 // 2. root layout:   import "@japanglobal/kit/consent.css";
-// 3. client shell:  <Consent config={{ lang, vendors }} posthog={posthog} />  +  <GoogleTagManager />  +  <MetaPixel />
+// 3. client shell:  <Consent config={{ lang, vendors }} posthog={posthog} />  +  <GoogleTagManager />
 // 4. initWhenConsented(() => posthog.init(key, { ...opts, ...posthogInitOptions() }))
 //    (PostHog never starts — no config/flags fetch — before Personalization is granted)
-// 5. export const track = createClientTracker({ posthog, dataLayer?: { grant, scrub }, meta?: { grant, scrub } })
+// 5. export const track = createClientTracker({ posthog, dataLayer?: { grant, scrub } })
 //    every emit goes through it; on sign-in setUserId(memberId), on sign-out setUserId(null)
 // 6. app/api/track/route.ts:  export const POST = createTrackRoute({ posthog: posthogNode, getMemberId, after })
 // 7. app/[locale]/legal/[doc]/page.tsx renders src/content/legal/<lang>/<doc>.md with <LegalDocument/>
@@ -82,34 +79,26 @@ env: {
 // 9. vendors + markdown: python3 workflows/legal_render.py sync <app> --repo <site> --strict   (JGC vault)
 ```
 
-## GTM / GA4 / Meta — zero setup
+## GTM / GA4 / Meta — the browser loads only PostHog + GTM
 
-Nothing to configure in the GTM or Meta UIs. Deploy with the env vars and events flow.
+The kit loads exactly two things in the browser, both only after Personalization consent: PostHog and the
+GTM container (`<GoogleTagManager/>`). Every other vendor lives **inside the container**. The kit ships no
+Meta code — no pixel, no `fbq`, no fbevents.js.
 
-- **GA4**: the GTM container needs only its **Google tag** (GA4 config) — already present. The kit pushes
-  gtag commands onto `window.dataLayer` as `arguments` objects: `gtag('event', name, {...props, app_id,
-  event_id?})` from the `dataLayer` leg, `gtag('set', {user_id})` from `setUserId()`. The Google tag
-  executes them as-is: every event reaches GA4 with its params, and `user_id` rides every following hit.
-  (A bare `{event: …}` object push reaches no GA4 tag without GTM triggers — the kit never sends one.)
-- **Do NOT add GA4 event tags, Data Layer Variables, or a Meta Pixel tag in GTM — delete any that exist** —
-  each one double counts what the kit already sends (a GA4 Event tag on "all events" sends every gtag event
-  a second time; a Meta tag's `fbq('track')` reaches every pixel the page has initialised).
-- **Meta**: only `NEXT_PUBLIC_META_PIXEL_ID`. `<MetaPixel/>` installs Meta's standard base code
-  (fbevents.js, `init`, `PageView`) after consent; fbevents.js itself counts client-side route changes
-  (history.pushState) as PageViews. The `meta` leg sends mapped names as standard events:
+The container holds two tags:
 
-  | canonical | Meta | canonical | Meta |
-  |---|---|---|---|
-  | `purchase` | `Purchase` | `sign_up` | `CompleteRegistration` |
-  | `begin_checkout` | `InitiateCheckout` | `search` | `Search` |
-  | `add_to_cart` | `AddToCart` | `add_payment_info` | `AddPaymentInfo` |
-  | `view_item` | `ViewContent` | `add_to_wishlist` | `AddToWishlist` |
-  | `generate_lead` | `Lead` | anything else | not sent (`unmapped`) |
-
-- **CAPI dedup**: give an event a deterministic `uuid` and it travels as GA4 `event_id` and Meta
-  `eventID`; send the same id as `event_id` from the server (CAPI) and Meta keeps one.
-- Consent: both legs are gated on Personalization (never exempt) and the site's grant; no consent ⇒ no
-  container, no pixel, no pushes, no fbq calls.
+- **Google tag (GA4 config)** — zero config. The kit pushes gtag commands onto `window.dataLayer` as
+  `arguments` objects: `gtag('event', name, {...props, app_id, event_id?})` from the `dataLayer` leg,
+  `gtag('set', {user_id})` from `setUserId()`. The Google tag executes them as-is: **every kit event reaches
+  GA4 with its params**, and `user_id` rides every following hit. (A bare `{event: …}` object push reaches no
+  GA4 tag without GTM triggers — the kit never sends one.)
+- **Meta Pixel tag** — Meta reaches the browser only through this tag (configured in GTM, not in code).
+- **Never add a GA4 Event tag** (nor GA4 triggers / Data Layer Variables for it): the Google tag already
+  sends every kit event, so a GA4 Event tag on "all events" double counts. Delete any that exist.
+- Server-side conversions (Meta CAPI, GA4 Measurement Protocol) stay the site's server code; give an event a
+  deterministic `uuid` and it travels as GA4 `event_id`, reusable as the server event's dedup id.
+- Consent: the `gtm` leg is gated on Personalization (never exempt) and the site's grant; no consent ⇒ no
+  container, no pushes — so no GA4 and no Meta.
 
 ## The tracking chain
 
@@ -119,7 +108,6 @@ const track = fanOut(
   label("posthog")(either(consented("personalization"), posthogSink(posthog),
                           pipe(beaconSink("/api/track"), gate(isMandatory, "no_consent")))),
   label("gtm")(pipe(dataLayerSink(), gate(consented("personalization"), "no_consent"), gate(granted, "no_grant"))),
-  label("meta")(pipe(metaPixelSink(), gate(consented("personalization"), "no_consent"), gate(granted, "no_grant"))),
 );
 ```
 

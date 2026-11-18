@@ -2,7 +2,7 @@
  * The standard JGC chains. A site adopts one in a line and can still stack its own gates on top.
  *
  * Client: PostHog when Personalization is granted; otherwise only mandatory events, via the server.
- *         gtag events on the dataLayer (GA4 in the GTM container) and the Meta Pixel, each only with
+ *         gtag events on the dataLayer (the GTM container's tags — GA4, Meta — take them from there), only with
  *         Personalization + the site's grant. Never exempt.
  * Server: PostHog with the mandatory exemption; every ads leg wrapped in a non-exempt consent gate.
  */
@@ -11,7 +11,6 @@ import { consented, isMandatory, type ConsentSource } from "./consent.js";
 import { beaconSink, dataLayerSink, posthogNodeSink, posthogSink, type PostHogLike, type PostHogNodeLike } from "./sinks.js";
 import type { TrackEvent } from "./types.js";
 import type { ReadOptions } from "../consent/core.js";
-import { metaPixelSink, type Fbq } from "../meta/index.js";
 import { kitEnv, missing } from "../env.js";
 
 const withAppId =
@@ -26,7 +25,7 @@ const noAppId = <E>(): Sink<E, Skip[]> => {
 
 /** A browser ads leg: always gated on Personalization (never exempt), then the site's grant, then scrubbed. */
 export interface AdsLeg<E, T> {
-  /** Test seam: the transport (default window.dataLayer / window.fbq). */
+  /** Test seam: the transport (default window.dataLayer). */
   readonly get?: () => T | null;
   readonly grant: Pred<E>;
   readonly scrub?: (e: E) => E;
@@ -44,8 +43,6 @@ export interface ClientTrackerOptions<E extends TrackEvent> {
   /** GA4 leg ("gtm": gtag `event` commands the container's Google tag sends, zero GTM config): on only when
    *  set. `grant` = the site's ads allow-list; `scrub` strips keys the platform must not see. */
   readonly dataLayer?: AdsLeg<E, unknown[]>;
-  /** Meta Pixel leg ("meta": `fbq('track', <Standard>, …)` for mapped names; needs `<MetaPixel/>` mounted). */
-  readonly meta?: AdsLeg<E, Fbq>;
   /** Test seam; default reads document.cookie. */
   readonly consent?: ConsentSource<E>;
 }
@@ -67,7 +64,6 @@ export function createClientTracker<E extends TrackEvent>(o: ClientTrackerOption
     safe(label(plane)(pipe(sink, gate(personal, "no_consent"), gate(leg.grant, "no_grant"), stamp, map<E>(leg.scrub ?? ((e) => e)))));
   const legs: Sink<E, unknown>[] = [safe(posthog)];
   if (o.dataLayer) legs.push(ads("gtm", dataLayerSink<E>(o.dataLayer.get), o.dataLayer));
-  if (o.meta) legs.push(ads("meta", metaPixelSink<E>(o.meta.get), o.meta));
   return fanOut(...legs);
 }
 

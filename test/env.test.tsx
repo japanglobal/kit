@@ -25,7 +25,6 @@ const ALL: readonly KitEnvVar[] = [
   "NEXT_PUBLIC_JGC_TRACK_URL",
   "NEXT_PUBLIC_JGC_SELLS",
   "NEXT_PUBLIC_GTM_ID",
-  "NEXT_PUBLIC_META_PIXEL_ID",
 ];
 const SITE: Partial<Record<KitEnvVar, string>> = {
   NEXT_PUBLIC_JGC_APP_ID: "zucity",
@@ -36,7 +35,6 @@ const SITE: Partial<Record<KitEnvVar, string>> = {
   NEXT_PUBLIC_JGC_TRACK_URL: "/t",
   NEXT_PUBLIC_JGC_SELLS: "true",
   NEXT_PUBLIC_GTM_ID: "GTM-5V6ZLSZ5",
-  NEXT_PUBLIC_META_PIXEL_ID: "123456789012345",
 };
 const setEnv = (vars: Partial<Record<KitEnvVar, string>>): void => {
   for (const k of ALL) vi.stubEnv(k, vars[k] ?? "");
@@ -65,7 +63,6 @@ describe("kitEnv — parsing", () => {
       trackUrl: "/api/track",
       sells: false,
       gtmId: null,
-      metaPixelId: null,
     });
   });
 
@@ -80,7 +77,6 @@ describe("kitEnv — parsing", () => {
       trackUrl: "/t",
       sells: true,
       gtmId: "GTM-5V6ZLSZ5",
-      metaPixelId: "123456789012345",
     });
   });
 
@@ -116,13 +112,6 @@ describe("kitEnv — parsing", () => {
     ["NEXT_PUBLIC_GTM_ID", "GTM-AB/../x.js", "gtmId", null],
     ["NEXT_PUBLIC_GTM_ID", "GTM-ABC 123", "gtmId", null],
     ["NEXT_PUBLIC_GTM_ID", "GTM-ABC123", "gtmId", "GTM-ABC123"],
-    ["NEXT_PUBLIC_META_PIXEL_ID", "off", "metaPixelId", null], // the documented off switch
-    ["NEXT_PUBLIC_META_PIXEL_ID", "12345", "metaPixelId", null],
-    ["NEXT_PUBLIC_META_PIXEL_ID", "1".repeat(21), "metaPixelId", null],
-    ["NEXT_PUBLIC_META_PIXEL_ID", "12345678x", "metaPixelId", null],
-    ["NEXT_PUBLIC_META_PIXEL_ID", "123456789');alert(1)//", "metaPixelId", null],
-    ["NEXT_PUBLIC_META_PIXEL_ID", "123456", "metaPixelId", "123456"],
-    ["NEXT_PUBLIC_META_PIXEL_ID", "123456789012345", "metaPixelId", "123456789012345"],
   ])("%s=%j → %s %j (invalid = unset, never a throw)", (name, value, key, want) => {
     setEnv({ [name]: value });
     expect(kitEnv()[key]).toEqual(want);

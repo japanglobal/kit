@@ -38,6 +38,8 @@ describe("<MetaPixel/> — consent-gated base code", () => {
     expect(pixelScripts().length).toBe(0);
     act(() => grant());
     expect(pixelScripts().length).toBe(1);
+    // pinned literal, not FBEVENTS_URL: a changed constant must fail here
+    expect(document.querySelectorAll("script")[0]?.getAttribute("src")).toBe("https://connect.facebook.net/en_US/fbevents.js");
     expect(fbqQueue()).toEqual([
       ["init", "123456789012345"],
       ["track", "PageView"],
@@ -61,11 +63,15 @@ describe("<MetaPixel/> — consent-gated base code", () => {
     expect(fbqQueue().filter((c) => c[0] === "init").map((c) => c[1])).toEqual(["123456789012345"]);
   });
 
-  it("id defaults to NEXT_PUBLIC_META_PIXEL_ID; unset ⇒ nothing", () => {
+  it("id defaults to NEXT_PUBLIC_META_PIXEL_ID; unset or \"off\" ⇒ nothing", () => {
     grant();
     vi.stubEnv("NEXT_PUBLIC_META_PIXEL_ID", "");
     render(<MetaPixel />);
     expect(w.fbq).toBeUndefined();
+    vi.stubEnv("NEXT_PUBLIC_META_PIXEL_ID", "off");
+    render(<MetaPixel />);
+    expect(w.fbq).toBeUndefined();
+    expect(document.querySelectorAll("script").length).toBe(0);
     vi.stubEnv("NEXT_PUBLIC_META_PIXEL_ID", "987654321");
     render(<MetaPixel />);
     expect(fbqQueue()).toEqual([["init", "987654321"], ["track", "PageView"]]);

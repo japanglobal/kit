@@ -116,6 +116,7 @@ describe("kitEnv — parsing", () => {
     ["NEXT_PUBLIC_GTM_ID", "GTM-AB/../x.js", "gtmId", null],
     ["NEXT_PUBLIC_GTM_ID", "GTM-ABC 123", "gtmId", null],
     ["NEXT_PUBLIC_GTM_ID", "GTM-ABC123", "gtmId", "GTM-ABC123"],
+    ["NEXT_PUBLIC_META_PIXEL_ID", "off", "metaPixelId", null], // the documented off switch
     ["NEXT_PUBLIC_META_PIXEL_ID", "12345", "metaPixelId", null],
     ["NEXT_PUBLIC_META_PIXEL_ID", "1".repeat(21), "metaPixelId", null],
     ["NEXT_PUBLIC_META_PIXEL_ID", "12345678x", "metaPixelId", null],

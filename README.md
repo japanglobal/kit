@@ -38,7 +38,7 @@ off and logs one `console.error` naming the variable (development only).
 | `NEXT_PUBLIC_JGC_TRACK_URL` | client | no (same-origin path) | `/api/track` | `track`: `createClientTracker` mandatory beacon · `consent/react`: `<Consent/>` consent record |
 | `NEXT_PUBLIC_JGC_SELLS` | client | no (`"true"` = on) | off | `legal`: `<LegalLinks/>` shows the 特商法 link |
 | `NEXT_PUBLIC_GTM_ID` | client | **yes, for GTM** (`^GTM-[A-Z0-9]+$`) | — (no GTM) | `gtm/react`: `<GoogleTagManager/>` |
-| `NEXT_PUBLIC_META_PIXEL_ID` | client | no — optional (`^\d{6,20}$`, the Meta dataset/pixel id) | — (no pixel, silently) | `meta/react`: `<MetaPixel/>` |
+| `NEXT_PUBLIC_META_PIXEL_ID` | client | no — optional (`^\d{6,20}$`, the Meta dataset/pixel id) | — (no pixel, silently). Any value failing the pattern — e.g. `off` — is unset too: a site that defaults the id in its config turns the pixel off with `NEXT_PUBLIC_META_PIXEL_ID=off` | `meta/react`: `<MetaPixel/>` |
 
 Not env, on purpose: **PostHog keys stay site-owned** — the site creates its posthog-js / posthog-node
 clients from its own `NEXT_PUBLIC_POSTHOG_KEY` / host and passes the instances (`posthog` props). The

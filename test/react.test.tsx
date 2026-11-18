@@ -71,8 +71,8 @@ describe("react consent", () => {
 describe("withdrawal sweep", () => {
   it("onConsent with Personalization declined erases its cookies and denies gtag", async () => {
     run.mockClear();
-    const gtag = vi.fn();
-    (window as unknown as { gtag: unknown }).gtag = gtag;
+    const layer: unknown[] = [];
+    (window as unknown as { dataLayer: unknown }).dataLayer = layer;
     setCookie(cookie({ categories: ["necessary"], expirationTime: Date.now() + 1e10 }));
     render(<Consent config={{ appName: "Z", lang: "en", links: { privacy: "/p", cookies: "/c" }, contact: "x", vendors: VENDORS }} />);
     await vi.waitFor(() => expect(run).toHaveBeenCalled());
@@ -81,6 +81,36 @@ describe("withdrawal sweep", () => {
     const erased = (eraseCookies.mock.calls[0]![0] as RegExp[]).map(String);
     expect(erased).toContain(String(/^ph_.*$/));
     expect(erased).toContain(String(/^_fbp$/));
-    expect(gtag).toHaveBeenCalledWith("consent", "update", expect.objectContaining({ analytics_storage: "denied" }));
+    const cmd = Array.from(layer.at(-1) as ArrayLike<unknown>);
+    expect(cmd.slice(0, 2)).toEqual(["consent", "update"]);
+    expect(cmd[2]).toMatchObject({ analytics_storage: "denied", ad_storage: "denied" });
+  });
+});
+
+describe("GoogleTagManager", () => {
+  it("loads the container only while Personalization is granted, once", async () => {
+    const { GoogleTagManager } = await import("../src/gtm/react.js");
+    (window as unknown as { dataLayer?: unknown[] }).dataLayer = [];
+    const view = render(<GoogleTagManager id="GTM-5V6ZLSZ5" />);
+    expect(document.getElementById("gtm-GTM-5V6ZLSZ5")).toBeNull();
+    act(() => {
+      setCookie(cookie({ expirationTime: Date.now() + 1e10 }));
+      window.dispatchEvent(new Event("cc:onChange"));
+    });
+    const s = document.getElementById("gtm-GTM-5V6ZLSZ5") as HTMLScriptElement;
+    expect(s.src).toBe("https://www.googletagmanager.com/gtm.js?id=GTM-5V6ZLSZ5");
+    const layer = (window as unknown as { dataLayer: unknown[] }).dataLayer;
+    expect(Array.from(layer[0] as ArrayLike<unknown>).slice(0, 2)).toEqual(["consent", "default"]);
+    expect(layer[1]).toMatchObject({ event: "gtm.js" });
+    view.rerender(<GoogleTagManager id="GTM-5V6ZLSZ5" />);
+    expect(document.querySelectorAll("#gtm-GTM-5V6ZLSZ5").length).toBe(1);
+    s.remove();
+  });
+
+  it("ignores a malformed id and declined consent", async () => {
+    const { GoogleTagManager } = await import("../src/gtm/react.js");
+    setCookie(cookie({ categories: ["necessary"], expirationTime: Date.now() + 1e10 }));
+    render(<><GoogleTagManager id="GTM-5V6ZLSZ5" /><GoogleTagManager id="evil.js" /></>);
+    expect(document.querySelectorAll("script[id^=gtm-]").length).toBe(0);
   });
 });

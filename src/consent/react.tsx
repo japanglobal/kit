@@ -7,6 +7,7 @@ import { useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react"
 import { consentFromDocument, cookieValue, readConsent, type Consent, type OptionalCategory, type ReadOptions } from "./core.js";
 import { defineConsent, globToRegExp, type ConsentSiteConfig } from "./config.js";
 import { applyConsentToPostHog, type PostHogConsentLike } from "./posthog.js";
+import { CONSENT_DENIED, gtag } from "../gtm/datalayer.js";
 
 const load = () => import("vanilla-cookieconsent");
 const EVENTS = ["cc:onConsent", "cc:onChange"] as const;
@@ -19,15 +20,9 @@ export interface ConsentProps {
   readonly trackUrl?: string;
 }
 
-/** Google Consent Mode: a running gtag stops writing cookies the moment Personalization is withdrawn. */
+/** Google Consent Mode: a loaded GTM/GA4 stops writing cookies the moment Personalization is withdrawn. */
 function denyGtag(): void {
-  const gtag = (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag;
-  gtag?.("consent", "update", {
-    ad_storage: "denied",
-    analytics_storage: "denied",
-    ad_user_data: "denied",
-    ad_personalization: "denied",
-  });
+  if ((window as unknown as { dataLayer?: unknown[] }).dataLayer) gtag("consent", "update", CONSENT_DENIED);
 }
 
 function record(url: string, source: "banner" | "settings", gpc: boolean): void {

@@ -1,6 +1,7 @@
 /** Thin transports. No policy here — policy is gate/map in the chain. */
 import { skip, type Sink, type Skip } from "./core.js";
 import type { TrackEvent } from "./types.js";
+import { dataLayer } from "../gtm/datalayer.js";
 
 export interface PostHogLike {
   capture(name: string, props?: Record<string, unknown>, options?: Record<string, unknown>): unknown;
@@ -15,8 +16,6 @@ export interface PostHogNodeLike {
     timestamp?: Date;
   }): unknown;
 }
-
-export type Gtag = (...args: unknown[]) => void;
 
 /** posthog-js capture. */
 export const posthogSink =
@@ -35,19 +34,18 @@ export const posthogNodeSink =
     return true;
   };
 
-/** gtag('event', …). Skip when gtag is absent (no measurement id, or consent never loaded it). */
-export const gtagSink =
-  <E extends TrackEvent>(get: () => Gtag | undefined = defaultGtag): Sink<E, true | Skip> =>
+/**
+ * window.dataLayer push for GTM: `{event, ...props, event_id}` — GA4/Ads/Meta tags in the container fire on it.
+ * `event_id` = the event's uuid when it has one (Meta pixel ⇄ CAPI dedup).
+ */
+export const dataLayerSink =
+  <E extends TrackEvent>(get: () => unknown[] | null = dataLayer): Sink<E, true | Skip> =>
   (e) => {
-    const g = get();
-    if (!g) return skip("no_gtag");
-    g("event", e.name, { ...e.props });
+    const layer = get();
+    if (!layer) return skip("no_browser");
+    layer.push({ event: e.name, ...e.props, ...(e.uuid ? { event_id: e.uuid } : {}) });
     return true;
   };
-
-function defaultGtag(): Gtag | undefined {
-  return typeof window === "undefined" ? undefined : (window as unknown as { gtag?: Gtag }).gtag;
-}
 
 /** Fire-and-forget JSON POST from the browser (survives navigation). */
 export const beaconSink =

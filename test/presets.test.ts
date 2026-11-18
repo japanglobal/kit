@@ -11,16 +11,17 @@ const events: TrackEvent[] = [...MANDATORY_EVENTS, ...names(200), "add_to_cart",
 
 function client(consent: () => ReturnType<typeof GRANTED>) {
   const ph = { capture: vi.fn() };
-  const gtag = vi.fn();
+  const layer: unknown[] = [];
+  const gtag = vi.fn((x: unknown) => layer.push(x));
   const beacon = vi.fn(() => true);
   vi.stubGlobal("navigator", { sendBeacon: beacon });
   const track = createClientTracker<TrackEvent>({
     appId: "test",
     posthog: ph,
     consent,
-    gtag: { get: () => gtag, grant: () => true },
+    dataLayer: { get: () => ({ push: gtag }) as unknown as unknown[], grant: () => true },
   });
-  return { track, ph, gtag, beacon };
+  return { track, ph, gtag, beacon, layer };
 }
 
 function server(consent: () => ReturnType<typeof GRANTED>) {
@@ -32,7 +33,7 @@ function server(consent: () => ReturnType<typeof GRANTED>) {
 }
 
 describe("client preset — consent × mandatory × plane", () => {
-  it("no consent: ads never send; mandatory → beacon only; the rest go nowhere", () => {
+  it("no consent: nothing reaches the dataLayer; mandatory → beacon only; the rest go nowhere", () => {
     const c = client(NONE);
     const reports = events.map((e) => c.track(e));
     expect(c.gtag).not.toHaveBeenCalled();
@@ -42,20 +43,22 @@ describe("client preset — consent × mandatory × plane", () => {
     expect(reports.flat().filter((r) => typeof r === "object" && r && "skipped" in r).length).toBeGreaterThan(events.length);
   });
 
-  it("consent: PostHog and GA4 receive everything; no beacon; GA4 carries app_id", () => {
+  it("consent: PostHog and the dataLayer receive everything; no beacon; pushes carry event, app_id, event_id", () => {
     const c = client(GRANTED);
     events.forEach((e) => c.track(e));
-    expect(c.ph.capture).toHaveBeenCalledTimes(events.length);
-    expect(c.gtag).toHaveBeenCalledTimes(events.length);
+    c.track({ name: "purchase", props: { value: 1 }, uuid: "u-1" });
+    expect(c.ph.capture).toHaveBeenCalledTimes(events.length + 1);
+    expect(c.gtag).toHaveBeenCalledTimes(events.length + 1);
     expect(c.beacon).not.toHaveBeenCalled();
-    expect(c.gtag.mock.calls[0]?.[2]).toMatchObject({ app_id: "test" });
+    expect(c.layer[0]).toMatchObject({ event: events[0]!.name, app_id: "test" });
+    expect(c.layer.at(-1)).toEqual({ event: "purchase", value: 1, app_id: "test", event_id: "u-1" });
   });
 
-  it("GA4 respects the grant", () => {
-    const gtag = vi.fn();
-    const t = createClientTracker<TrackEvent>({ appId: "a", posthog: null, consent: GRANTED, gtag: { get: () => gtag, grant: () => false } });
-    expect(t({ name: "login" })).toContainEqual({ skipped: "ga4:login:no_grant" });
-    expect(gtag).not.toHaveBeenCalled();
+  it("the dataLayer leg respects the grant", () => {
+    const layer: unknown[] = [];
+    const t = createClientTracker<TrackEvent>({ appId: "a", posthog: null, consent: GRANTED, dataLayer: { get: () => layer, grant: () => false } });
+    expect(t({ name: "login" })).toContainEqual({ skipped: "gtm:login:no_grant" });
+    expect(layer).toEqual([]);
   });
 });
 

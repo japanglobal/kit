@@ -62,6 +62,14 @@
     "./legal/docs": {
       "types": "./dist/legal/docs.d.ts",
       "default": "./dist/legal/docs.js"
+    },
+    "./gtm": {
+      "types": "./dist/gtm/index.d.ts",
+      "default": "./dist/gtm/index.js"
+    },
+    "./gtm/react": {
+      "types": "./dist/gtm/react.d.ts",
+      "default": "./dist/gtm/react.js"
     }
   },
   "scripts": {

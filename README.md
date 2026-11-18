@@ -9,6 +9,8 @@ MIT. One package, subpath exports; a new shared module is a new folder, not a ne
 | `@japanglobal/kit/consent/react` | `<Consent/>` (bottom-bar banner), `useConsent`, `<ConsentGate/>`, `<CookieSettingsButton/>` |
 | `@japanglobal/kit/consent/server` | `createTrackRoute` — `POST /api/track` for mandatory events without consent |
 | `@japanglobal/kit/track` | the tracking chain: sinks + `gate` / `map` / `either` / `fanOut` / `label` / `safe` / `pipe`, `consented()`, presets |
+| `@japanglobal/kit/gtm/react` | `<GoogleTagManager id/>` — loads the GTM container only while Personalization is granted |
+| `@japanglobal/kit/gtm` | `dataLayer()`, `gtag()` (Consent Mode commands) |
 | `@japanglobal/kit/legal` | `<LegalDocument/>`, `<LegalLinks/>`, `<CookieTable/>` |
 | `@japanglobal/kit/legal/docs` | `LEGAL_DOCS`, `LEGAL_FILES` — edge-safe, for proxy route allow-lists |
 | `@japanglobal/kit/consent.css` | banner styles (vanilla-cookieconsent + JGC overrides; theme with `--cc-*`) |
@@ -23,7 +25,8 @@ Banner engine: [vanilla-cookieconsent](https://github.com/orestbida/cookieconsen
 // 3. client shell:  <Consent config={{ appName, lang, links: { privacy: "/{lang}/legal/privacy", cookies: "/{lang}/legal/cookies" }, contact, vendors }} posthog={posthog} />
 // 4. initWhenConsented(() => posthog.init(key, { ...opts, ...posthogInitOptions({ revision: 1 }) }), { revision: 1 })
 //    (PostHog never starts — no config/flags fetch — before Personalization is granted)
-// 5. export const track = createClientTracker({ appId, posthog, gtag?: { grant, scrub } })   // every emit goes through it
+// 5. export const track = createClientTracker({ appId, posthog, dataLayer?: { grant, scrub } })   // every emit goes through it
+//    <GoogleTagManager id={GTM_ID} /> in the client shell — GA4/Ads/Meta are tags in the container, fired by dataLayer events
 // 6. app/api/track/route.ts:  export const POST = createTrackRoute({ posthog: posthogNode, appId, getMemberId, after })
 // 7. app/[locale]/legal/[doc]/page.tsx renders src/content/legal/<lang>/<doc>.md with <LegalDocument/>
 // 8. footer: <LegalLinks lang={lang} tokushoho={sells} />
@@ -37,7 +40,7 @@ Banner engine: [vanilla-cookieconsent](https://github.com/orestbida/cookieconsen
 const track = fanOut(
   label("posthog")(either(consented("personalization"), posthogSink(posthog),
                           pipe(beaconSink("/api/track"), gate(isMandatory, "no_consent")))),
-  label("ga4")(pipe(gtagSink(), gate(consented("personalization"), "no_consent"), gate(granted, "no_grant"))),
+  label("gtm")(pipe(dataLayerSink(), gate(consented("personalization"), "no_consent"), gate(granted, "no_grant"))),
 );
 ```
 

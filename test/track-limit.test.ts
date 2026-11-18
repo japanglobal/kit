@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { clientIp, createLimiter, createTrackRoute, TRACK_LIMIT } from "../src/consent/server.js";
+import { clientIp, cloudflareClientIp, createLimiter, createTrackRoute, TRACK_LIMIT } from "../src/consent/server.js";
 import { cookie } from "./fixtures.js";
 
 const CC = (id: string) => `cc_cookie=${cookie({ expirationTime: Date.now() + 1e10, consentId: id })}`;
@@ -41,12 +41,23 @@ describe("track route throttle (sec.4)", () => {
     expect(clientIp(new Headers({ "x-forwarded-for": "4.4.4.4, 10.0.0.1" }))).toBe("4.4.4.4");
   });
 
-  it("clientIp option: behind Cloudflare, cf-connecting-ip keys the throttle (edge IPs never pool visitors)", async () => {
-    const POST = route({ limit: { requests: 1, windowMs: 60_000 }, clientIp: (h) => h.get("cf-connecting-ip") ?? clientIp(h) });
-    const edge = { "x-real-ip": "172.70.0.1" };
-    expect((await POST(req({ ...edge, "cf-connecting-ip": "8.8.8.8" }))).status).toBe(204);
-    expect((await POST(req({ ...edge, "cf-connecting-ip": "9.9.9.9" }))).status).toBe(204);
-    expect((await POST(req({ ...edge, "cf-connecting-ip": "8.8.8.8" }))).status).toBe(429);
+  it("cloudflareClientIp: cf-connecting-ip only with Cloudflare's origin secret; a forged header at the origin falls back", () => {
+    const key = "k".repeat(32);
+    const via = new Headers({ "x-real-ip": "172.70.0.1", "cf-connecting-ip": "8.8.8.8", "x-jgc-origin": key });
+    const direct = new Headers({ "x-real-ip": "6.6.6.6", "cf-connecting-ip": "8.8.8.8" });
+    const wrong = new Headers({ "x-real-ip": "6.6.6.6", "cf-connecting-ip": "8.8.8.8", "x-jgc-origin": "k".repeat(31) + "x" });
+    expect(cloudflareClientIp(via, key)).toBe("8.8.8.8");
+    expect(cloudflareClientIp(direct, key)).toBe("6.6.6.6");
+    expect(cloudflareClientIp(wrong, key)).toBe("6.6.6.6");
+    expect(cloudflareClientIp(via, null)).toBe("172.70.0.1"); // no key configured: never trust the header
+  });
+
+  it("spoofed cf-connecting-ip straight at the origin cannot dodge the throttle", async () => {
+    const key = "k".repeat(32);
+    const POST = route({ limit: { requests: 3, windowMs: 60_000 }, clientIp: (h) => cloudflareClientIp(h, key) });
+    const codes = [];
+    for (let i = 0; i < 5; i++) codes.push((await POST(req({ "x-real-ip": "6.6.6.6", "cf-connecting-ip": `10.1.0.${i}` }))).status);
+    expect(codes).toEqual([204, 204, 204, 429, 429]);
   });
 
   it("no IP header: never pooled into one shared bucket", async () => {

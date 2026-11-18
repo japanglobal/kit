@@ -7,6 +7,11 @@
 - `createTrackRoute`: per-IP throttle (120 / 60 s → 429 + Retry-After) and 8 KiB body cap (413); `limit`, `maxBodyBytes`.
 - `jgc-audit` bin + `auditFindings`: prod audit gate with a dated, reasoned GHSA allowlist (`.audit-allow.json`).
 - `firewall/track-rate-limit.json`: Vercel WAF rule for `vercel firewall rules add --json`.
+- Cloudflare origin lock: `firewall/cloudflare-ips.json` + generated `origin-lock-cloudflare-ips.json`,
+  `origin-lock-header.json`, `scripts/cloudflare-firewall.mjs` (`--check` weekly), `jgc-origin-check` bin,
+  `cloudflareClientIp` (trusts `cf-connecting-ip` only with `JGC_ORIGIN_KEY`).
+- `checkSecurityHeaders` also catches host wildcards (`https://*`, `*.com`), keyword case (`'UNSAFE-EVAL'`),
+  scheme-wide `base-uri` / `form-action` / `script-src-attr`.
 - `prepare` builds `dist/`, so a site can pin a git commit before a release is published.
 
 ## 2.0.0 — 2026-11-18

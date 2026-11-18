@@ -103,6 +103,16 @@ describe("checkSecurityHeaders (catch rate on planted positives)", () => {
     ["referrer unsafe-url", swap("Referrer-Policy", "unsafe-url")],
     ["x-powered-by", [...clean(), { key: "X-Powered-By", value: "Next.js" }]],
     ["missing permissions-policy", swap("Permissions-Policy", null)],
+    // evaluator plants (2026-11-18): host wildcards, keyword case, navigation directives
+    ["object-src *", swap("Content-Security-Policy", csp().replace("object-src 'none'", "object-src *"))],
+    ["script-src https://*", swap("Content-Security-Policy", csp().replace("script-src 'self'", "script-src 'self' https://*"))],
+    ["script-src *.com", swap("Content-Security-Policy", csp().replace("script-src 'self'", "script-src 'self' *.com"))],
+    ["connect-src https://*.com", swap("Content-Security-Policy", csp().replace("connect-src 'self'", "connect-src 'self' https://*.com"))],
+    ["'UNSAFE-EVAL'", swap("Content-Security-Policy", csp().replace("script-src 'self'", "script-src 'self' 'UNSAFE-EVAL'"))],
+    ["base-uri https:", swap("Content-Security-Policy", csp().replace("base-uri 'self'", "base-uri https:"))],
+    ["form-action https:", swap("Content-Security-Policy", csp().replace("form-action 'self'", "form-action https:"))],
+    ["HTTPS: in connect-src", swap("Content-Security-Policy", csp().replace("connect-src 'self'", "connect-src 'self' HTTPS:"))],
+    ["script-src-attr unsafe-eval", swap("Content-Security-Policy", `${csp()}; script-src-attr 'unsafe-eval'`)],
   ];
   it.each(planted)("catches %s", (_, h) => {
     expect(checkSecurityHeaders(h).length).toBeGreaterThan(0);

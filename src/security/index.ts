@@ -251,7 +251,21 @@ export function withSecurity<C extends NextConfigLike>(
 const REQUIRED = ["content-security-policy", "strict-transport-security", "x-content-type-options", "x-frame-options", "referrer-policy", "permissions-policy"];
 const REFERRER_OK = new Set(["strict-origin-when-cross-origin", "strict-origin", "same-origin", "no-referrer"]);
 /** Directives that load code or carry data out: no wildcard, scheme-only or eval source. img-src may be `https:`. */
-const STRICT = ["default-src", "script-src", "script-src-elem", "connect-src", "frame-src", "child-src", "worker-src", "object-src"];
+const STRICT = [
+  "default-src",
+  "script-src",
+  "script-src-elem",
+  "script-src-attr",
+  "connect-src",
+  "frame-src",
+  "child-src",
+  "worker-src",
+  "object-src",
+  "base-uri",
+  "form-action",
+];
+/** `*`, `https://*`, `*.com`, `https://*.com:443/x` — a wildcard that spans a whole TLD or more. `*.example.com` is fine. */
+const WIDE_HOST = /^([a-z][a-z0-9+.-]*:\/\/)?\*(\.[^.:/]+)?(:\d+|:\*)?(\/.*)?$/i;
 
 export function parseCsp(csp: string): Map<string, string[]> {
   const m = new Map<string, string[]>();
@@ -287,11 +301,12 @@ export function checkSecurityHeaders(h: Headers | Record<string, string> | reado
     const fa = csp.get("frame-ancestors");
     if (fa && fa.join(" ") !== "'none'" && fa.join(" ") !== "'self'") out.push("csp: frame-ancestors admits other origins");
     for (const [d, vals] of csp) {
-      if (vals.includes("*")) out.push(`csp: ${d} *`);
-      if (!STRICT.includes(d)) continue;
-      for (const v of vals) {
+      for (const raw of vals) {
+        const v = raw.toLowerCase(); // CSP keywords and schemes are case-insensitive
         if (v === "'unsafe-eval'" && !o.dev) out.push(`csp: ${d} 'unsafe-eval'`);
-        if (/^(https?|wss?|data|blob):$/i.test(v) && !(v === "blob:" && ["worker-src", "child-src"].includes(d))) out.push(`csp: ${d} ${v} (scheme-wide)`);
+        if (WIDE_HOST.test(v)) out.push(`csp: ${d} ${raw} (wildcard host)`);
+        if (!STRICT.includes(d)) continue;
+        if (/^(https?|wss?|data|blob|ftp|filesystem):$/.test(v) && !(v === "blob:" && ["worker-src", "child-src"].includes(d))) out.push(`csp: ${d} ${raw} (scheme-wide)`);
       }
     }
   }

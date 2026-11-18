@@ -254,3 +254,16 @@ describe("env law", () => {
     expect(readers).toEqual([join("src", "env.ts")]);
   });
 });
+
+describe("JGC_ORIGIN_KEY (server-only)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("≥ 32 chars or unset", async () => {
+    const { originKey } = await import("../src/env.js");
+    vi.stubEnv("JGC_ORIGIN_KEY", "short");
+    expect(originKey()).toBeNull();
+    vi.stubEnv("JGC_ORIGIN_KEY", "s".repeat(32));
+    expect(originKey()).toBe("s".repeat(32));
+    vi.stubEnv("JGC_ORIGIN_KEY", "");
+    expect(originKey()).toBeNull();
+  });
+});

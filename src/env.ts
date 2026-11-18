@@ -90,6 +90,15 @@ export function kitEnv(): KitEnv {
 }
 
 const isDev = (): boolean => read(() => process.env.NODE_ENV) !== "production";
+/**
+ * Server-only (never NEXT_PUBLIC): the secret Cloudflare adds to every proxied request (Transform Rule header
+ * `x-jgc-origin`). Present and matching ⇒ the request came through Cloudflare (website-baseline sec.7). ≥ 32 chars.
+ */
+export const originKey = (): string | null => {
+  const v = read(() => process.env.JGC_ORIGIN_KEY);
+  return v && v.length >= 32 ? v : null;
+};
+
 /** `next dev` only (not test, not production): the one place a dev-only relaxation may switch on. */
 export const isDevelopment = (): boolean => read(() => process.env.NODE_ENV) === "development";
 const reported = new Set<string>();

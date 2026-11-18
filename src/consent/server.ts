@@ -7,7 +7,7 @@
 import { consentFromHeader, type ReadOptions } from "./core.js";
 import { CLIENT_MANDATORY_EVENTS } from "../track/consent.js";
 import type { PostHogNodeLike } from "../track/sinks.js";
-import { kitEnv, missing } from "../env.js";
+import { kitEnv, missing, originKey } from "../env.js";
 
 export interface TrackRouteOptions {
   readonly posthog: (PostHogNodeLike & { flush?: () => Promise<unknown> }) | null;
@@ -28,9 +28,8 @@ export interface TrackRouteOptions {
   /** Largest accepted body; bigger = 413 before parsing. Default 8 KiB. */
   readonly maxBodyBytes?: number;
   /**
-   * The throttle key. Default `clientIp` (Vercel's `x-real-ip`). Behind another proxy (Cloudflare in front of
-   * Vercel) Vercel sees the proxy's IP: pass `(h) => h.get("cf-connecting-ip") ?? clientIp(h)` so visitors are not
-   * pooled per edge node. Null = unknown: never pooled.
+   * The throttle key. Default `clientIp` (Vercel's `x-real-ip`). Behind Cloudflare pass `cloudflareClientIp`, which
+   * trusts `cf-connecting-ip` only with the origin secret. Null = unknown: never pooled.
    */
   readonly clientIp?: (headers: Headers) => string | null;
 }
@@ -43,6 +42,26 @@ export const LIMITER_MAX_KEYS = 10_000;
 /** The client IP Vercel sets (`x-real-ip`, else the first `x-forwarded-for` hop). Null = unknown: never pooled. */
 export function clientIp(h: Headers): string | null {
   return h.get("x-real-ip")?.trim() || h.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+}
+
+export const ORIGIN_HEADER = "x-jgc-origin";
+
+/** Constant-time string compare (no early exit on the first differing char). */
+function same(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+/**
+ * The visitor IP for a Cloudflare-proxied site (website-baseline sec.7). `cf-connecting-ip` is trusted only when the
+ * request carries Cloudflare's origin secret (`x-jgc-origin` = JGC_ORIGIN_KEY) — anyone can send the header straight
+ * to the Vercel origin. Otherwise Vercel's own client IP (`clientIp`).
+ */
+export function cloudflareClientIp(h: Headers, key: string | null = originKey()): string | null {
+  const viaCloudflare = key !== null && same(h.get(ORIGIN_HEADER) ?? "", key);
+  return (viaCloudflare && h.get("cf-connecting-ip")?.trim()) || clientIp(h);
 }
 
 /** Fixed-window counter per key. Returns seconds until retry when over, else 0. */

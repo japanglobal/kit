@@ -38,7 +38,8 @@
     "LICENSE"
   ],
   "bin": {
-    "jgc-audit": "bin/audit.mjs"
+    "jgc-audit": "bin/audit.mjs",
+    "jgc-origin-check": "bin/origin-check.mjs"
   },
   "exports": {
     "./consent": {
@@ -90,7 +91,8 @@
     "test": "vitest run",
     "lint": "tsc -p tsconfig.test.json --noUnusedLocals --noUnusedParameters",
     "prepublishOnly": "npm run lint && npm test && npm run build",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "firewall:cloudflare": "node scripts/cloudflare-firewall.mjs"
   },
   "peerDependencies": {
     "react": ">=19",

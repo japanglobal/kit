@@ -21,8 +21,8 @@ Banner engine: [vanilla-cookieconsent](https://github.com/orestbida/cookieconsen
 ## Environment variables
 
 The kit is configured by environment. `src/env.ts` is the only module that reads `process.env`; every
-variable is `NEXT_PUBLIC_*` and referenced literally, so Next inlines it into client bundles at build time
-(set it before `next build`). An invalid value counts as unset — the kit never throws over config. A prop
+variable is referenced literally; `NEXT_PUBLIC_*` ones are inlined into client bundles at build time
+(set them before `next build`), `JGC_ORIGIN_KEY` is server-only and never reaches a bundle. An invalid value counts as unset — the kit never throws over config. A prop
 passed explicitly always beats the variable. A required variable missing at runtime turns its feature
 off and logs one `console.error` naming the variable (development only).
 
@@ -36,6 +36,7 @@ off and logs one `console.error` naming the variable (development only).
 | `NEXT_PUBLIC_JGC_TRACK_URL` | client | no (same-origin path) | `/api/track` | `track`: `createClientTracker` mandatory beacon · `consent/react`: `<Consent/>` consent record |
 | `NEXT_PUBLIC_JGC_SELLS` | client | no (`"true"` = on) | off | `legal`: `<LegalLinks/>` shows the 特商法 link |
 | `NEXT_PUBLIC_GTM_ID` | client | **yes, for GTM** (`^GTM-[A-Z0-9]+$`) | — (no GTM) | `gtm/react`: `<GoogleTagManager/>` |
+| `JGC_ORIGIN_KEY` | server only | **yes, behind Cloudflare** (≥ 32 chars; = Cloudflare's `x-jgc-origin` header) | — (`cf-connecting-ip` never trusted) | `consent/server`: `cloudflareClientIp` |
 
 Not env, on purpose: **PostHog keys stay site-owned** — the site creates its posthog-js / posthog-node
 clients from its own `NEXT_PUBLIC_POSTHOG_KEY` / host and passes the instances (`posthog` props). The
@@ -138,9 +139,8 @@ export default withSecurity(nextConfig, {
   `{ key, value }[]` config form. Sites run it in a unit test on `headers()` and on a live `curl -sI`.
 - `createTrackRoute` throttles per IP (`x-real-ip`, else first `x-forwarded-for`; no IP ⇒ not pooled):
   120 / 60 s → 429 + `Retry-After`; bodies over 8 KiB → 413 before parsing. Options `limit`, `maxBodyBytes`,
-  `clientIp` — a site behind Cloudflare (proxied DNS in front of Vercel) keys on `cf-connecting-ip`, else every
-  visitor behind one Cloudflare edge shares a bucket. The Vercel WAF rule has the same blind spot: enable Vercel's
-  Verified Proxy for Cloudflare, or rate-limit at Cloudflare instead.
+  `clientIp` — a Cloudflare-proxied site passes `cloudflareClientIp`: `cf-connecting-ip` only when the request
+  carries the origin secret (`x-jgc-origin` = `JGC_ORIGIN_KEY`), else Vercel's client IP.
 
 - `jgc-audit` (bin): `npm audit --omit=dev`, exit 1 on any high/critical advisory not listed in the site's
   `.audit-allow.json` — `[{ "id": "GHSA-…", "reason": "<why no fix + why not exploitable here>", "until": "YYYY-MM-DD" }]`.
@@ -157,6 +157,34 @@ vercel firewall diff            # review, then a human runs: vercel firewall pub
 # after 7 days of log data (dashboard → Firewall → filter by rule): enforce
 vercel firewall rules edit "jgc: throttle POST /api/track" --rate-limit-action rate_limit --yes && vercel firewall diff
 ```
+
+### Cloudflare origin lock (every JGC site — website-baseline sec.7)
+
+Every site runs behind Cloudflare (proxied DNS, SSL **Full (strict)**), and its Vercel origin answers only
+Cloudflare. Vercel has no TCP firewall, so the lock is a WAF rule — two, because Vercel's Verified Proxy (on by
+default for Cloudflare) may rewrite the client IP to the visitor's, which would make an IP allowlist deny everyone:
+
+1. **Secret header** (works either way). Cloudflare → Rules → Transform Rules → *Modify request header*: set
+   `x-jgc-origin` = a random ≥ 32-char secret on all requests to the zone. Vercel env (server-only): `JGC_ORIGIN_KEY`
+   = the same secret (lets `cloudflareClientIp` trust `cf-connecting-ip`).
+2. **Stage both rules in log mode** from the site repo:
+   ```sh
+   vercel link
+   R=node_modules/@japanglobal/kit/firewall
+   vercel firewall rules add --json "$(cat $R/origin-lock-cloudflare-ips.json)" --yes
+   vercel firewall rules add --json "$(sed "s/\${JGC_ORIGIN_KEY}/$JGC_ORIGIN_KEY/" $R/origin-lock-header.json)" --yes
+   vercel firewall diff   # a human publishes: vercel firewall publish --yes
+   ```
+3. **Read 7 days** (dashboard → Firewall → filter by rule). The header rule should match only bypass traffic. If the
+   IP rule also matches real visitors, Vercel rewrote client IPs — remove it and keep the header rule.
+4. **Enforce**: `vercel firewall rules edit "<rule>" --action deny --yes`, publish. Both rules exempt `/api/cron/`
+   (Vercel Cron calls the deployment directly; the route must fail closed on `CRON_SECRET`) and `/.well-known/`.
+5. **Prove it**: `npx jgc-origin-check <domain>` — requests the Vercel edge IPs directly with Host/SNI = the domain;
+   exit 1 while any answers. Run it after every firewall change and on a schedule.
+
+Cloudflare's ranges live in `firewall/cloudflare-ips.json` (`npm run firewall:cloudflare` regenerates it and the IP
+rule; the weekly `cloudflare-ranges` workflow goes red on drift → release the kit, re-stage the rule). Global rate
+limits for a proxied site belong at Cloudflare (it sees the visitor); the Vercel WAF throttle keys on what Vercel sees.
 
 ### Residual risk (known, accepted)
 

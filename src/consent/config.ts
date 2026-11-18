@@ -6,6 +6,7 @@
 import type * as CC from "vanilla-cookieconsent";
 import { CONSENT_COOKIE, ONE_YEAR_DAYS, type Category } from "./core.js";
 import { COPY, countryName, fill, type Lang } from "../i18n/copy.js";
+import { kitEnv, missing } from "../env.js";
 
 export interface Vendor {
   readonly name: string;
@@ -20,7 +21,8 @@ export type VendorMap = Readonly<Record<Category, readonly Vendor[]>>;
 export interface ConsentSiteConfig {
   readonly appName: string;
   readonly lang: Lang;
-  /** Policy revision; bump when the policy or vendor list changes materially (re-prompts everyone). */
+  /** Policy revision; bump when the policy or vendor list changes materially (re-prompts everyone).
+   *  Default: NEXT_PUBLIC_JGC_CONSENT_REVISION (1 when unset). */
   readonly revision?: number;
   /** Paths with `{lang}`, e.g. "/{lang}/legal/privacy". */
   readonly links: { readonly privacy: string; readonly cookies: string };
@@ -29,6 +31,32 @@ export interface ConsentSiteConfig {
   /** navigator.globalPrivacyControl — adds the GPC note. Nothing is pre-selected either way. */
   readonly gpc?: boolean;
   readonly callbacks?: Pick<CC.CookieConsentConfig, "onFirstConsent" | "onConsent" | "onChange">;
+}
+
+/** What a site passes to <Consent/>: `lang` + `vendors`; the rest defaults from the env (props win). */
+export type ConsentOptions = Pick<ConsentSiteConfig, "lang" | "vendors"> &
+  Partial<Pick<ConsentSiteConfig, "appName" | "contact" | "revision" | "links">>;
+
+/**
+ * Fill a site's options from the env: appName ← NEXT_PUBLIC_JGC_APP_NAME, contact ←
+ * NEXT_PUBLIC_JGC_CONTACT_EMAIL, revision ← NEXT_PUBLIC_JGC_CONSENT_REVISION, links ←
+ * NEXT_PUBLIC_JGC_LEGAL_PATH. Null (banner off, one dev error naming the variable) when the name
+ * or contact is missing.
+ */
+export function resolveConsentConfig(o: ConsentOptions): Omit<ConsentSiteConfig, "gpc" | "callbacks"> | null {
+  const env = kitEnv();
+  const appName = o.appName ?? env.appName;
+  const contact = o.contact ?? env.contactEmail;
+  if (!appName) return missing("NEXT_PUBLIC_JGC_APP_NAME", "The cookie banner");
+  if (!contact) return missing("NEXT_PUBLIC_JGC_CONTACT_EMAIL", "The cookie banner");
+  const doc = (d: string): string => env.legalPath.replace("{doc}", d);
+  return {
+    ...o,
+    appName,
+    contact,
+    revision: o.revision ?? env.consentRevision,
+    links: o.links ?? { privacy: doc("privacy"), cookies: doc("cookies") },
+  };
 }
 
 const CATEGORIES: readonly Category[] = ["necessary", "personalization", "partners"];
@@ -98,7 +126,7 @@ export function defineConsent(c: ConsentSiteConfig): CC.CookieConsentConfig {
   return {
     mode: "opt-in",
     autoShow: true,
-    revision: c.revision ?? 1,
+    revision: c.revision ?? kitEnv().consentRevision,
     hideFromBots: true,
     disablePageInteraction: false,
     cookie: { name: CONSENT_COOKIE, expiresAfterDays: ONE_YEAR_DAYS, sameSite: "Lax" },

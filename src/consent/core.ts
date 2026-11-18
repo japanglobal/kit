@@ -3,6 +3,7 @@
  * cookie on the client (document.cookie), in middleware and in route handlers
  * (the Cookie header). Anything unreadable is NO consent: deny is the default.
  */
+import { kitEnv } from "../env.js";
 
 export type Category = "necessary" | "personalization" | "partners";
 export type OptionalCategory = Exclude<Category, "necessary">;
@@ -21,7 +22,8 @@ export interface Consent {
 }
 
 export interface ReadOptions {
-  /** The site's current policy revision; a cookie from another revision is no consent (re-prompt). */
+  /** The site's current policy revision; a cookie from another revision is no consent (re-prompt).
+   *  Default: NEXT_PUBLIC_JGC_CONSENT_REVISION (1 when unset). */
   readonly revision?: number;
   readonly now?: number;
 }
@@ -36,7 +38,7 @@ function decode(raw: string): unknown {
   }
 }
 
-/** Parse a raw `cc_cookie` value. Malformed, expired or stale-revision ⇒ null. */
+/** Parse a raw `cc_cookie` value. Malformed, expired or stale-revision (≠ the site's revision) ⇒ null. */
 export function readConsent(raw: string | null | undefined, opts: ReadOptions = {}): Consent | null {
   if (!raw || raw.length > 4096) return null;
   const v = decode(raw);
@@ -46,7 +48,7 @@ export function readConsent(raw: string | null | undefined, opts: ReadOptions = 
   if (typeof revision !== "number" || !Number.isInteger(revision) || revision < 0) return null;
   if (typeof consentId !== "string" || consentId.length === 0 || consentId.length > 64) return null;
   if (typeof expirationTime !== "number" || expirationTime <= (opts.now ?? Date.now())) return null;
-  if (opts.revision !== undefined && revision !== opts.revision) return null;
+  if (revision !== (opts.revision ?? kitEnv().consentRevision)) return null;
   return {
     personalization: categories.includes("personalization"),
     partners: categories.includes("partners"),

@@ -9,6 +9,7 @@ import { COPY, countryName, type Lang } from "../i18n/copy.js";
 import type { Category } from "../consent/core.js";
 import type { VendorMap } from "../consent/config.js";
 import { CookieSettingsButton } from "../consent/react.js";
+import { kitEnv } from "../env.js";
 
 import type { LegalDoc } from "./docs.js";
 export { LEGAL_DOCS, LEGAL_FILES, type LegalDoc } from "./docs.js";
@@ -23,9 +24,9 @@ export function LegalDocument({ markdown, className }: { markdown: string; class
 
 export interface LegalLinksProps {
   readonly lang: Lang;
-  /** Path with `{lang}` and `{doc}`, default "/{lang}/legal/{doc}". */
+  /** Path with `{lang}` and `{doc}`. Default: NEXT_PUBLIC_JGC_LEGAL_PATH ("/{lang}/legal/{doc}"). */
   readonly href?: string;
-  /** Sites that sell show the 特商法 link. */
+  /** Sites that sell show the 特商法 link. Default: NEXT_PUBLIC_JGC_SELLS === "true". */
   readonly tokushoho?: boolean;
   readonly className?: string;
   readonly linkClassName?: string;
@@ -33,19 +34,22 @@ export interface LegalLinksProps {
   readonly Link?: (p: { href: string; className?: string; children: ReactNode }) => ReactNode;
 }
 
-export function LegalLinks({ lang, href = "/{lang}/legal/{doc}", tokushoho = false, className, linkClassName, Link }: LegalLinksProps): ReactNode {
+export function LegalLinks({ lang, href, tokushoho, className, linkClassName, Link }: LegalLinksProps): ReactNode {
+  const env = kitEnv();
+  const path = href ?? env.legalPath;
+  const sells = tokushoho ?? env.sells;
   const t = COPY[lang];
   const docs: readonly (readonly [LegalDoc, string])[] = [
     ["privacy", t.privacy],
     ["terms", t.terms],
     ["cookies", t.cookies],
-    ...(tokushoho ? [["tokushoho", t.tokushoho] as const] : []),
+    ...(sells ? [["tokushoho", t.tokushoho] as const] : []),
   ];
   const A = Link ?? ((p: { href: string; className?: string; children: ReactNode }) => <a {...p} />);
   return (
     <nav aria-label={t.legalNav} className={className}>
       {docs.map(([doc, text]) => (
-        <A key={doc} href={href.replace("{lang}", lang).replace("{doc}", doc)} className={linkClassName}>
+        <A key={doc} href={path.replace("{lang}", lang).replace("{doc}", doc)} className={linkClassName}>
           {text}
         </A>
       ))}

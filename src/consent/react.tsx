@@ -5,18 +5,20 @@
  */
 import { useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { consentFromDocument, cookieValue, readConsent, type Consent, type OptionalCategory, type ReadOptions } from "./core.js";
-import { defineConsent, globToRegExp, type ConsentSiteConfig } from "./config.js";
+import { defineConsent, globToRegExp, resolveConsentConfig, type ConsentOptions } from "./config.js";
 import { applyConsentToPostHog, type PostHogConsentLike } from "./posthog.js";
 import { CONSENT_DENIED, gtag } from "../gtm/datalayer.js";
+import { kitEnv } from "../env.js";
 
 const load = () => import("vanilla-cookieconsent");
 const EVENTS = ["cc:onConsent", "cc:onChange"] as const;
 
 export interface ConsentProps {
-  readonly config: Omit<ConsentSiteConfig, "gpc" | "callbacks">;
+  /** `lang` + `vendors`; appName, contact, revision and links default from the env (resolveConsentConfig). */
+  readonly config: ConsentOptions;
   /** posthog-js, when the site runs it: follows every decision. */
   readonly posthog?: PostHogConsentLike | null;
-  /** Where `consent_updated` is recorded (server, posthog-node). */
+  /** Where `consent_updated` is recorded (server, posthog-node). Default: NEXT_PUBLIC_JGC_TRACK_URL. */
   readonly trackUrl?: string;
 }
 
@@ -31,9 +33,12 @@ function record(url: string, source: "banner" | "settings", gpc: boolean): void 
   else void fetch(url, { method: "POST", body, keepalive: true, headers: { "content-type": "application/json" } });
 }
 
-export function Consent({ config, posthog = null, trackUrl = "/api/track" }: ConsentProps): null {
-  const read: ReadOptions = { revision: config.revision ?? 1 };
+export function Consent({ config: options, posthog = null, trackUrl = kitEnv().trackUrl }: ConsentProps): null {
   useEffect(() => {
+    // Name or contact missing ⇒ no banner (and one dev error naming the env var).
+    const config = resolveConsentConfig(options);
+    if (!config) return;
+    const read: ReadOptions = { revision: config.revision };
     let live = true;
     void load().then((CC) => {
       if (!live) return;
@@ -77,8 +82,8 @@ export function Consent({ config, posthog = null, trackUrl = "/api/track" }: Con
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    void load().then((CC) => CC.setLanguage(config.lang, true));
-  }, [config.lang]);
+    void load().then((CC) => CC.setLanguage(options.lang, true));
+  }, [options.lang]);
   return null;
 }
 
@@ -89,7 +94,7 @@ const subscribe = (notify: () => void): (() => void) => {
   };
 };
 
-/** The current decision (null = none, or invalid/expired/stale). Re-renders on every decision. */
+/** The current decision (null = none, or invalid/expired/stale; revision default: the env's). Re-renders on every decision. */
 export function useConsent(read?: ReadOptions): Consent | null {
   const raw = useSyncExternalStore(
     subscribe,

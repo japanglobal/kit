@@ -28,7 +28,7 @@ function server(consent: () => ReturnType<typeof GRANTED>) {
   const ph = { capture: vi.fn() };
   const ga4 = vi.fn(() => true);
   const meta = vi.fn(() => true);
-  const track = createServerTracker<TrackEvent>({ posthog: ph, distinctId: () => "m1", consent, ads: { ga4, meta } });
+  const track = createServerTracker<TrackEvent>({ appId: "test", posthog: ph, distinctId: () => "m1", consent, ads: { ga4, meta } });
   return { track, ph, ga4, meta };
 }
 
@@ -89,7 +89,7 @@ describe("server preset — ads legs are never exempt", () => {
 
   it("a throwing leg never breaks the others", () => {
     const ph = { capture: vi.fn() };
-    const t = createServerTracker<TrackEvent>({ posthog: ph, distinctId: () => "m", consent: GRANTED, ads: { bad: () => { throw new Error("x"); } } });
+    const t = createServerTracker<TrackEvent>({ appId: "test", posthog: ph, distinctId: () => "m", consent: GRANTED, ads: { bad: () => { throw new Error("x"); } } });
     expect(t({ name: "purchase" })).toContainEqual({ skipped: "error" });
     expect(ph.capture).toHaveBeenCalled();
   });

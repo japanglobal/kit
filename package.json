@@ -70,6 +70,10 @@
     "./gtm/react": {
       "types": "./dist/gtm/react.d.ts",
       "default": "./dist/gtm/react.js"
+    },
+    "./env": {
+      "types": "./dist/env.d.ts",
+      "default": "./dist/env.js"
     }
   },
   "scripts": {

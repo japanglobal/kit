@@ -1,28 +1,37 @@
 "use client";
 /**
- * <GoogleTagManager id/> — loads the site's GTM container only while `category` (default Personalization) is
- * granted. GA4, Ads and Meta live as tags inside the container; the site pushes events with `dataLayerSink`.
- * Withdrawal reloads the page (consent config), so a loaded container never outlives the consent.
+ * <GoogleTagManager/> — loads the site's GTM container (NEXT_PUBLIC_GTM_ID, or the `id` prop) only while
+ * `category` (default Personalization) is granted. GA4, Ads and Meta live as tags inside the container;
+ * the site pushes events with `dataLayerSink`. Withdrawal reloads the page (consent config), so a loaded
+ * container never outlives the consent. Unset or malformed id ⇒ renders nothing.
  */
 import { useEffect } from "react";
 import type { OptionalCategory, ReadOptions } from "../consent/core.js";
 import { useConsent } from "../consent/react.js";
+import { GTM_ID_RE, kitEnv, missing } from "../env.js";
 import { CONSENT_GRANTED, dataLayer, gtag } from "./datalayer.js";
 
-export const GTM_ID_RE = /^GTM-[A-Z0-9]{4,12}$/;
+export { GTM_ID_RE };
 
 export function GoogleTagManager({
-  id,
+  id: idProp,
   category = "personalization",
   read,
 }: {
-  id: string | null | undefined;
+  /** Default: NEXT_PUBLIC_GTM_ID; null = off. */
+  id?: string | null;
   category?: OptionalCategory;
   read?: ReadOptions;
 }): null {
+  const id = idProp === undefined ? kitEnv().gtmId : idProp;
+  const valid = !!id && GTM_ID_RE.test(id);
   const granted = useConsent(read)?.[category] ?? false;
+  const off = idProp === null;
   useEffect(() => {
-    if (!granted || !id || !GTM_ID_RE.test(id)) return;
+    if (!valid && !off) missing("NEXT_PUBLIC_GTM_ID", "Google Tag Manager");
+  }, [valid, off]);
+  useEffect(() => {
+    if (!granted || !valid || !id) return;
     if (document.getElementById(`gtm-${id}`)) return;
     gtag("consent", "default", CONSENT_GRANTED);
     dataLayer()?.push({ "gtm.start": Date.now(), event: "gtm.js" });
@@ -31,6 +40,6 @@ export function GoogleTagManager({
     s.async = true;
     s.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(id)}`;
     document.head.appendChild(s);
-  }, [granted, id]);
+  }, [granted, valid, id]);
   return null;
 }

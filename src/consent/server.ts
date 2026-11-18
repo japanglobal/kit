@@ -6,10 +6,13 @@
 import { consentFromHeader, type ReadOptions } from "./core.js";
 import { CLIENT_MANDATORY_EVENTS } from "../track/consent.js";
 import type { PostHogNodeLike } from "../track/sinks.js";
+import { kitEnv, missing } from "../env.js";
 
 export interface TrackRouteOptions {
   readonly posthog: (PostHogNodeLike & { flush?: () => Promise<unknown> }) | null;
-  readonly appId: string;
+  /** Stamped as `app_id`. Default: NEXT_PUBLIC_JGC_APP_ID; missing ⇒ events are accepted and dropped. */
+  readonly appId?: string;
+  /** Default revision: NEXT_PUBLIC_JGC_CONSENT_REVISION. */
   readonly read?: ReadOptions;
   /** The signed-in member id from the request's session; never from the body. */
   readonly getMemberId?: (req: Request) => Promise<string | null> | string | null;
@@ -44,6 +47,8 @@ const bad = (why: string): Response => new Response(why, { status: 400 });
 
 export function createTrackRoute(o: TrackRouteOptions): (req: Request) => Promise<Response> {
   const accept = o.accept ?? CLIENT_MANDATORY_EVENTS;
+  const appId = o.appId ?? kitEnv().appId;
+  if (!appId) missing("NEXT_PUBLIC_JGC_APP_ID", "The track route");
   return async (req) => {
     let body: unknown;
     try {
@@ -65,7 +70,7 @@ export function createTrackRoute(o: TrackRouteOptions): (req: Request) => Promis
     const distinctId = member ?? consent?.id;
     if (!distinctId) return bad("person");
 
-    const properties: Record<string, unknown> = { ...clean, app_id: o.appId };
+    const properties: Record<string, unknown> = { ...clean, app_id: appId };
     if (!member) properties.$process_person_profile = false;
     if (name === "consent_updated" && consent) {
       Object.assign(properties, {
@@ -83,7 +88,7 @@ export function createTrackRoute(o: TrackRouteOptions): (req: Request) => Promis
         };
       }
     }
-    if (o.posthog) {
+    if (o.posthog && appId) {
       o.posthog.capture({ distinctId, event: name, properties, uuid: uuid as string | undefined });
       const flush = (): unknown => o.posthog?.flush?.();
       if (o.after) o.after(flush);
